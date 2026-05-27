@@ -19,9 +19,16 @@ class Settings(BaseSettings):
 
     storage_root: str = "storage"
 
+    transcription_backend: str = "faster_whisper"
     whisper_model: str = "base"
     whisper_device: str = "cpu"
     whisper_compute_type: str = "int8"
+    whisper_language: str | None = None
+    whisper_beam_size: int = 5
+    whisper_vad_filter: bool = True
+    whisper_word_timestamps: bool = False
+    whisper_initial_prompt: str = ""
+    transcript_timeline_block_seconds: float = 30.0
 
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2"

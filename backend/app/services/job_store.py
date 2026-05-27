@@ -105,6 +105,32 @@ class JobStore:
             progress=JobProgress(step=step, percent=percent, message=message),
         )
 
+    def set_transcription_progress(
+        self,
+        job_id: str,
+        *,
+        percent: int,
+        message: str,
+        segments_completed: int = 0,
+        phase: str = "transcribing",
+    ) -> JobRecord:
+        """Update job progress during the transcription step."""
+        record = self.get(job_id)
+        pipeline_percent = 10 + int(percent * 0.2)
+        record.progress = JobProgress(
+            step=PipelineStep.TRANSCRIBE,
+            percent=min(30, pipeline_percent),
+            message=message,
+        )
+        record.status = JobStatus.TRANSCRIBING
+        record.metadata["transcription_progress"] = {
+            "phase": phase,
+            "percent": percent,
+            "segments_completed": segments_completed,
+        }
+        self.save(record)
+        return record
+
     def job_paths(self, job_id: str) -> dict[str, Path]:
         base = self._job_dir(job_id)
         return {

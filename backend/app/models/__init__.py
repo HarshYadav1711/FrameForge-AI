@@ -5,7 +5,14 @@ from app.models.schemas import (
     JobStatusResponse,
     PipelineStep,
     Scene,
+    SubtitleCue,
+    TranscriptResponse,
+    TranscriptResult,
     TranscriptSegment,
+    TranscriptTimelineBlock,
+    TranscriptionMetadata,
+    TranscriptionProgress,
+    TranscriptionStatusSummary,
 )
 
 __all__ = [
@@ -15,5 +22,12 @@ __all__ = [
     "JobStatusResponse",
     "PipelineStep",
     "Scene",
+    "SubtitleCue",
+    "TranscriptResponse",
+    "TranscriptResult",
     "TranscriptSegment",
+    "TranscriptTimelineBlock",
+    "TranscriptionMetadata",
+    "TranscriptionProgress",
+    "TranscriptionStatusSummary",
 ]

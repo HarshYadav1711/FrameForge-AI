@@ -3,8 +3,8 @@ import logging
 from pathlib import Path
 
 from app.config import Settings
-from app.core.exceptions import PipelineError
-from app.models.schemas import JobProgress, JobStatus, PipelineStep
+from app.core.exceptions import PipelineError, TranscriptionError
+from app.models.schemas import JobProgress, JobStatus, PipelineStep, TranscriptionProgress
 from app.services.job_store import JobStore
 from app.services.rendering import render_video
 from app.services.segmentation import segment_script
@@ -22,6 +22,18 @@ class PipelineOrchestrator:
         self._store = store
         self._settings = settings
 
+    def _transcription_progress_handler(self, job_id: str):
+        def on_progress(progress: TranscriptionProgress) -> None:
+            self._store.set_transcription_progress(
+                job_id,
+                percent=progress.percent,
+                message=progress.message,
+                segments_completed=progress.segments_completed,
+                phase=progress.phase,
+            )
+
+        return on_progress
+
     async def run(self, job_id: str) -> None:
         paths = self._store.job_paths(job_id)
         record = self._store.get(job_id)
@@ -38,16 +50,40 @@ class PipelineOrchestrator:
             if not audio_candidates:
                 raise FileNotFoundError("Uploaded audio file not found")
             audio_path = audio_candidates[0]
-            segments, duration = await asyncio.to_thread(
-                transcribe_audio,
-                audio_path,
-                self._settings,
-                transcript_out=paths["transcript"],
-            )
+
+            try:
+                segments, duration = await asyncio.to_thread(
+                    transcribe_audio,
+                    audio_path,
+                    self._settings,
+                    transcript_out=paths["transcript"],
+                    initial_prompt=record.script[:500] if record.script else None,
+                    on_progress=self._transcription_progress_handler(job_id),
+                )
+            except TranscriptionError as exc:
+                logger.error(
+                    "Transcription failed for job %s: %s (cause=%s)",
+                    job_id,
+                    exc.message,
+                    exc.cause,
+                )
+                raise
+
             record = self._store.get(job_id)
             record.transcript = segments
             record.duration_seconds = duration
+            if paths["transcript"].exists():
+                from app.services.transcription.formats import read_transcript_artifact
+
+                artifact = read_transcript_artifact(paths["transcript"])
+                record.metadata["transcription"] = artifact.metadata.model_dump()
             self._store.save(record)
+            self._store.set_step(
+                job_id,
+                PipelineStep.TRANSCRIBE,
+                30,
+                f"Transcription complete ({len(segments)} segments)",
+            )
 
             # Step 2: Segment script
             self._store.set_step(
@@ -125,6 +161,20 @@ class PipelineOrchestrator:
                 ),
             )
             logger.info("Job %s completed", job_id)
+
+        except TranscriptionError as exc:
+            logger.exception("Transcription step failed for job %s", job_id)
+            self._store.update_status(
+                job_id,
+                JobStatus.FAILED,
+                error=exc.message,
+                progress=JobProgress(
+                    step=PipelineStep.TRANSCRIBE,
+                    percent=0,
+                    message="Transcription failed",
+                ),
+            )
+            raise PipelineError(exc.message, step="transcribe") from exc
 
         except Exception as exc:
             logger.exception("Pipeline failed for job %s", job_id)

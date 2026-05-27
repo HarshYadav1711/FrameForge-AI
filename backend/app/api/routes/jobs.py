@@ -5,11 +5,66 @@ from fastapi.responses import FileResponse
 
 from app.api.deps import get_job_store, get_orchestrator, get_upload_service
 from app.core.exceptions import InvalidAudioError, JobNotFoundError, UploadNotFoundError
-from app.models.schemas import CreateJobResponse, JobStatus, JobStatusResponse
+from app.models.schemas import (
+    CreateJobResponse,
+    JobRecord,
+    JobStatus,
+    JobStatusResponse,
+    TranscriptResponse,
+    TranscriptionMetadata,
+    TranscriptionStatusSummary,
+)
+from app.services.transcription.base import build_transcript_result
+from app.services.transcription.formats import read_transcript_artifact
 from app.pipeline.orchestrator import PipelineOrchestrator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+
+def _transcription_summary(
+    job_id: str,
+    record: JobRecord,
+) -> TranscriptionStatusSummary | None:
+    store = get_job_store()
+    paths = store.job_paths(job_id)
+    meta = record.metadata.get("transcription")
+
+    if meta:
+        return TranscriptionStatusSummary(
+            available=True,
+            segment_count=meta.get("segment_count"),
+            duration_seconds=meta.get("duration_seconds"),
+            language=meta.get("language"),
+            language_probability=meta.get("language_probability"),
+            model=meta.get("model"),
+            backend=meta.get("backend"),
+        )
+
+    if record.transcript:
+        return TranscriptionStatusSummary(
+            available=True,
+            segment_count=len(record.transcript),
+            duration_seconds=record.duration_seconds,
+        )
+
+    if paths["transcript"].exists():
+        try:
+            artifact = read_transcript_artifact(paths["transcript"])
+            m = artifact.metadata
+            return TranscriptionStatusSummary(
+                available=True,
+                segment_count=m.segment_count,
+                duration_seconds=m.duration_seconds,
+                language=m.language,
+                language_probability=m.language_probability,
+                model=m.model,
+                backend=m.backend,
+            )
+        except Exception:
+            logger.warning("Could not read transcript artifact for %s", job_id)
+
+    return None
 
 
 def _to_status_response(job_id: str) -> JobStatusResponse:
@@ -29,6 +84,7 @@ def _to_status_response(job_id: str) -> JobStatusResponse:
         scenes_count=len(record.scenes) if record.scenes else None,
         video_url=video_url,
         duration_seconds=record.duration_seconds,
+        transcription=_transcription_summary(job_id, record),
     )
 
 
@@ -114,6 +170,50 @@ async def get_job(job_id: str) -> JobStatusResponse:
         return _to_status_response(job_id)
     except JobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=exc.message) from exc
+
+
+@router.get("/{job_id}/transcript", response_model=TranscriptResponse)
+async def get_job_transcript(job_id: str) -> TranscriptResponse:
+    store = get_job_store()
+    try:
+        record = store.get(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+
+    paths = store.job_paths(job_id)
+    if paths["transcript"].exists():
+        try:
+            result = read_transcript_artifact(paths["transcript"])
+            return TranscriptResponse(
+                job_id=job_id,
+                segments=result.segments,
+                timeline_blocks=result.timeline_blocks,
+                subtitle_cues=result.subtitle_cues,
+                metadata=result.metadata,
+            )
+        except Exception as exc:
+            logger.warning("Transcript artifact unreadable for %s: %s", job_id, exc)
+
+    if not record.transcript:
+        raise HTTPException(
+            status_code=404,
+            detail="Transcript not available yet",
+        )
+
+    result = build_transcript_result(
+        record.transcript,
+        TranscriptionMetadata(
+            duration_seconds=record.duration_seconds or 0,
+            segment_count=len(record.transcript),
+        ),
+    )
+    return TranscriptResponse(
+        job_id=job_id,
+        segments=result.segments,
+        timeline_blocks=result.timeline_blocks,
+        subtitle_cues=result.subtitle_cues,
+        metadata=result.metadata,
+    )
 
 
 @router.get("/{job_id}/video")

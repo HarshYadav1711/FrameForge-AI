@@ -33,3 +33,14 @@ class InvalidAudioError(FrameForgeError):
 class PipelineError(FrameForgeError):
     def __init__(self, message: str, *, step: str) -> None:
         super().__init__(message, code=f"pipeline_{step}")
+
+
+class TranscriptionError(FrameForgeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        cause: str | None = None,
+    ) -> None:
+        self.cause = cause
+        super().__init__(message, code="transcription_failed")

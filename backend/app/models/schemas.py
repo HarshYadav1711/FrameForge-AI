@@ -24,10 +24,78 @@ class PipelineStep(str, Enum):
     RENDER = "render"
 
 
+class TranscriptWord(BaseModel):
+    start: float
+    end: float
+    word: str
+
+
 class TranscriptSegment(BaseModel):
     start: float
     end: float
     text: str
+    confidence: float | None = None
+    words: list[TranscriptWord] | None = None
+
+
+class SubtitleCue(BaseModel):
+    index: int
+    start: float
+    end: float
+    text: str
+
+
+class TranscriptTimelineBlock(BaseModel):
+    """Merged segment block for scene segmentation and timeline sync."""
+
+    index: int
+    start: float
+    end: float
+    text: str
+
+
+class TranscriptionMetadata(BaseModel):
+    language: str | None = None
+    language_probability: float | None = None
+    duration_seconds: float = 0.0
+    segment_count: int = 0
+    model: str = ""
+    device: str = ""
+    backend: str = "faster_whisper"
+
+
+class TranscriptionProgress(BaseModel):
+    phase: str = "transcribing"
+    percent: int = 0
+    message: str = ""
+    segments_completed: int = 0
+
+
+class TranscriptResult(BaseModel):
+    """Structured transcription output for subtitles, scenes, and timeline sync."""
+
+    segments: list[TranscriptSegment] = Field(default_factory=list)
+    timeline_blocks: list[TranscriptTimelineBlock] = Field(default_factory=list)
+    subtitle_cues: list[SubtitleCue] = Field(default_factory=list)
+    metadata: TranscriptionMetadata = Field(default_factory=TranscriptionMetadata)
+
+
+class TranscriptionStatusSummary(BaseModel):
+    available: bool = False
+    segment_count: int | None = None
+    duration_seconds: float | None = None
+    language: str | None = None
+    language_probability: float | None = None
+    model: str | None = None
+    backend: str | None = None
+
+
+class TranscriptResponse(BaseModel):
+    job_id: str
+    segments: list[TranscriptSegment] = Field(default_factory=list)
+    timeline_blocks: list[TranscriptTimelineBlock] = Field(default_factory=list)
+    subtitle_cues: list[SubtitleCue] = Field(default_factory=list)
+    metadata: TranscriptionMetadata = Field(default_factory=TranscriptionMetadata)
 
 
 class Scene(BaseModel):
@@ -56,6 +124,7 @@ class JobStatusResponse(BaseModel):
     scenes_count: int | None = None
     video_url: str | None = None
     duration_seconds: float | None = None
+    transcription: TranscriptionStatusSummary | None = None
 
 
 class CreateJobResponse(BaseModel):

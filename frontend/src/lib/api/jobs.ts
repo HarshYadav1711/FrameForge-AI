@@ -1,6 +1,10 @@
 import { env } from "@/config/env";
 import { apiRequest } from "@/lib/http/client";
-import type { CreateJobResponse, JobStatusResponse } from "@/types/job";
+import type {
+  CreateJobResponse,
+  JobStatusResponse,
+  TranscriptResponse,
+} from "@/types/job";
 
 export function createJob(
   script: string,
@@ -18,6 +22,12 @@ export function createJob(
 
 export function getJob(jobId: string): Promise<JobStatusResponse> {
   return apiRequest<JobStatusResponse>(`/api/v1/jobs/${jobId}`, {
+    cache: "no-store",
+  });
+}
+
+export function getJobTranscript(jobId: string): Promise<TranscriptResponse> {
+  return apiRequest<TranscriptResponse>(`/api/v1/jobs/${jobId}/transcript`, {
     cache: "no-store",
   });
 }
