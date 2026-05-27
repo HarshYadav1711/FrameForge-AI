@@ -44,10 +44,10 @@ export function Studio() {
     };
   }, [jobId, poll]);
 
-  async function handleSubmit(script: string, audio: File) {
+  async function handleSubmit(script: string, uploadId: string) {
     setSubmitting(true);
     try {
-      const res = await createJob(script, audio);
+      const res = await createJob(script, uploadId);
       setJobId(res.id);
       setJob(null);
       await poll(res.id);

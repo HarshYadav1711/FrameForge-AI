@@ -25,7 +25,13 @@ class JobStore:
     def _meta_path(self, job_id: str) -> Path:
         return self._job_dir(job_id) / "job.json"
 
-    def create(self, script: str, audio_filename: str) -> JobRecord:
+    def create(
+        self,
+        script: str,
+        audio_filename: str,
+        *,
+        upload_id: str | None = None,
+    ) -> JobRecord:
         job_id = str(uuid4())
         job_dir = self._job_dir(job_id)
         job_dir.mkdir(parents=True)
@@ -40,6 +46,7 @@ class JobStore:
             updated_at=now,
             script=script,
             audio_filename=audio_filename,
+            metadata={"upload_id": upload_id} if upload_id else {},
         )
         self.save(record)
         logger.info("Created job %s", job_id)

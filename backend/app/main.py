@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import health, jobs
+from app.api.routes import health, jobs, uploads
 from app.config import get_settings
 from app.core.exceptions import FrameForgeError
 from app.core.logging import setup_logging
@@ -16,6 +16,7 @@ async def lifespan(_app: FastAPI):
     setup_logging(settings.debug)
     settings.storage_path.mkdir(parents=True, exist_ok=True)
     settings.jobs_path.mkdir(parents=True, exist_ok=True)
+    settings.uploads_path.mkdir(parents=True, exist_ok=True)
     yield
 
 
@@ -41,13 +42,19 @@ def create_app() -> FastAPI:
         _request: Request,
         exc: FrameForgeError,
     ) -> JSONResponse:
-        status = 404 if exc.code == "job_not_found" else 500
+        status_map = {
+            "job_not_found": 404,
+            "upload_not_found": 404,
+            "invalid_audio": 400,
+        }
+        status = status_map.get(exc.code, 500)
         return JSONResponse(
             status_code=status,
             content={"error": exc.code, "message": exc.message},
         )
 
     app.include_router(health.router, prefix="/api/v1")
+    app.include_router(uploads.router, prefix="/api/v1")
     app.include_router(jobs.router, prefix="/api/v1")
 
     return app

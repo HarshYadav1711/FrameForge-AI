@@ -1,21 +1,27 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { AudioUploader } from "@/components/upload/audio-uploader";
 
 interface UploadFormProps {
   disabled?: boolean;
-  onSubmit: (script: string, audio: File) => Promise<void>;
+  onSubmit: (script: string, uploadId: string) => Promise<void>;
 }
 
 export function UploadForm({ disabled, onSubmit }: UploadFormProps) {
   const [script, setScript] = useState("");
-  const [audio, setAudio] = useState<File | null>(null);
+  const [uploadId, setUploadId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -25,17 +31,19 @@ export function UploadForm({ disabled, onSubmit }: UploadFormProps) {
       setError("Script must be at least 10 characters.");
       return;
     }
-    if (!audio) {
-      setError("Upload a narration audio file.");
+    if (!uploadId) {
+      setError("Upload narration audio before generating.");
       return;
     }
 
     try {
-      await onSubmit(script.trim(), audio);
+      await onSubmit(script.trim(), uploadId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start job");
     }
   }
+
+  const canSubmit = !!uploadId && !disabled;
 
   return (
     <Card className="border-border/60 bg-card/80 backdrop-blur">
@@ -56,29 +64,16 @@ export function UploadForm({ disabled, onSubmit }: UploadFormProps) {
               value={script}
               onChange={(e) => setScript(e.target.value)}
               disabled={disabled}
-              className="resize-y min-h-[180px] font-mono text-sm"
+              className="min-h-[180px] resize-y font-mono text-sm"
             />
           </div>
 
           <div className="space-y-2">
-            <Label className="flex flex-col items-start gap-2">
-              Narration audio
-              <input
-                ref={fileRef}
-                id="audio"
-                type="file"
-                title="Narration audio"
-                accept=".mp3,.wav,.m4a,.ogg,.flac,.webm,audio/*"
-                className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:bg-secondary file:px-4 file:py-2 file:text-sm file:font-medium file:text-secondary-foreground hover:file:bg-secondary/80"
-                disabled={disabled}
-                onChange={(e) => setAudio(e.target.files?.[0] ?? null)}
-              />
-            </Label>
-            {audio && (
-              <p className="text-xs text-muted-foreground">
-                {audio.name} · {(audio.size / 1024 / 1024).toFixed(2)} MB
-              </p>
-            )}
+            <Label>Narration audio</Label>
+            <AudioUploader
+              disabled={disabled}
+              onUploadIdChange={setUploadId}
+            />
           </div>
 
           {error && (
@@ -87,7 +82,7 @@ export function UploadForm({ disabled, onSubmit }: UploadFormProps) {
             </p>
           )}
 
-          <Button type="submit" size="lg" className="w-full" disabled={disabled}>
+          <Button type="submit" size="lg" className="w-full" disabled={!canSubmit}>
             Generate video
           </Button>
         </form>

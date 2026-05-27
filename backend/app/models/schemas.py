@@ -64,6 +64,16 @@ class CreateJobResponse(BaseModel):
     message: str = "Job created and processing started"
 
 
+class AudioUploadResponse(BaseModel):
+    id: str
+    original_filename: str
+    sanitized_filename: str
+    extension: str
+    size_bytes: int
+    content_type: str | None = None
+    message: str = "Audio uploaded successfully"
+
+
 class HealthResponse(BaseModel):
     status: str = "ok"
     version: str = "0.1.0"

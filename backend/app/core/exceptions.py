@@ -20,6 +20,16 @@ class JobNotReadyError(FrameForgeError):
         )
 
 
+class UploadNotFoundError(FrameForgeError):
+    def __init__(self, upload_id: str) -> None:
+        super().__init__(f"Upload not found: {upload_id}", code="upload_not_found")
+
+
+class InvalidAudioError(FrameForgeError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message, code="invalid_audio")
+
+
 class PipelineError(FrameForgeError):
     def __init__(self, message: str, *, step: str) -> None:
         super().__init__(message, code=f"pipeline_{step}")

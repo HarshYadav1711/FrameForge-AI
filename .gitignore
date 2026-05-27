@@ -9,6 +9,8 @@ venv/
 # Backend runtime
 backend/storage/jobs/*
 !backend/storage/jobs/.gitkeep
+backend/storage/uploads/*
+!backend/storage/uploads/.gitkeep
 
 # Node
 node_modules/

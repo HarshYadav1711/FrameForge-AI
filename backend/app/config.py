@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     def jobs_path(self) -> Path:
         return self.storage_path / "jobs"
 
+    @property
+    def uploads_path(self) -> Path:
+        return self.storage_path / "uploads"
+
 
 @lru_cache
 def get_settings() -> Settings:
