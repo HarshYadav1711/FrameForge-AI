@@ -3,6 +3,7 @@ import { apiRequest } from "@/lib/http/client";
 import type {
   CreateJobResponse,
   JobStatusResponse,
+  ScenesResponse,
   TranscriptResponse,
 } from "@/types/job";
 
@@ -28,6 +29,12 @@ export function getJob(jobId: string): Promise<JobStatusResponse> {
 
 export function getJobTranscript(jobId: string): Promise<TranscriptResponse> {
   return apiRequest<TranscriptResponse>(`/api/v1/jobs/${jobId}/transcript`, {
+    cache: "no-store",
+  });
+}
+
+export function getJobScenes(jobId: string): Promise<ScenesResponse> {
+  return apiRequest<ScenesResponse>(`/api/v1/jobs/${jobId}/scenes`, {
     cache: "no-store",
   });
 }

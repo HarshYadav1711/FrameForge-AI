@@ -47,6 +47,7 @@ def create_app() -> FastAPI:
             "upload_not_found": 404,
             "invalid_audio": 400,
             "transcription_failed": 422,
+            "segmentation_failed": 422,
         }
         status = status_map.get(exc.code, 500)
         return JSONResponse(

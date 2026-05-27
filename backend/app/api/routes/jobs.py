@@ -10,10 +10,13 @@ from app.models.schemas import (
     JobRecord,
     JobStatus,
     JobStatusResponse,
+    ScenesResponse,
+    SegmentationStatusSummary,
     TranscriptResponse,
     TranscriptionMetadata,
     TranscriptionStatusSummary,
 )
+from app.services.segmentation.formats import read_scenes_artifact
 from app.services.transcription.base import build_transcript_result
 from app.services.transcription.formats import read_transcript_artifact
 from app.pipeline.orchestrator import PipelineOrchestrator
@@ -67,6 +70,50 @@ def _transcription_summary(
     return None
 
 
+def _segmentation_summary(
+    job_id: str,
+    record: JobRecord,
+) -> SegmentationStatusSummary | None:
+    store = get_job_store()
+    paths = store.job_paths(job_id)
+    meta = record.metadata.get("segmentation")
+
+    if meta:
+        return SegmentationStatusSummary(
+            available=True,
+            scene_count=meta.get("scene_count"),
+            source=meta.get("source"),
+            timeline_aligned=meta.get("timeline_aligned"),
+            total_duration_seconds=meta.get("total_duration_seconds"),
+        )
+
+    if record.scenes:
+        return SegmentationStatusSummary(
+            available=True,
+            scene_count=len(record.scenes),
+            timeline_aligned=any(
+                s.start_time is not None for s in record.scenes
+            ),
+            total_duration_seconds=record.duration_seconds,
+        )
+
+    if paths["scenes_artifact"].exists():
+        try:
+            artifact = read_scenes_artifact(paths["scenes_artifact"])
+            m = artifact.metadata
+            return SegmentationStatusSummary(
+                available=True,
+                scene_count=m.scene_count,
+                source=m.source,
+                timeline_aligned=m.timeline_aligned,
+                total_duration_seconds=m.total_duration_seconds,
+            )
+        except Exception:
+            logger.warning("Could not read scenes artifact for %s", job_id)
+
+    return None
+
+
 def _to_status_response(job_id: str) -> JobStatusResponse:
     store = get_job_store()
     record = store.get(job_id)
@@ -85,6 +132,7 @@ def _to_status_response(job_id: str) -> JobStatusResponse:
         video_url=video_url,
         duration_seconds=record.duration_seconds,
         transcription=_transcription_summary(job_id, record),
+        segmentation=_segmentation_summary(job_id, record),
     )
 
 
@@ -212,6 +260,46 @@ async def get_job_transcript(job_id: str) -> TranscriptResponse:
         segments=result.segments,
         timeline_blocks=result.timeline_blocks,
         subtitle_cues=result.subtitle_cues,
+        metadata=result.metadata,
+    )
+
+
+@router.get("/{job_id}/scenes", response_model=ScenesResponse)
+async def get_job_scenes(job_id: str) -> ScenesResponse:
+    store = get_job_store()
+    try:
+        record = store.get(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+
+    paths = store.job_paths(job_id)
+    if paths["scenes_artifact"].exists():
+        try:
+            result = read_scenes_artifact(paths["scenes_artifact"])
+            return ScenesResponse(
+                job_id=job_id,
+                scenes=result.scenes,
+                metadata=result.metadata,
+            )
+        except Exception as exc:
+            logger.warning("Scenes artifact unreadable for %s: %s", job_id, exc)
+
+    if not record.scenes:
+        raise HTTPException(
+            status_code=404,
+            detail="Scenes not available yet",
+        )
+
+    from app.services.segmentation.base import build_segmentation_result
+
+    result = build_segmentation_result(
+        record.scenes,
+        source="unknown",
+        total_duration=record.duration_seconds or 0,
+    )
+    return ScenesResponse(
+        job_id=job_id,
+        scenes=result.scenes,
         metadata=result.metadata,
     )
 

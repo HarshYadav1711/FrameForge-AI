@@ -141,4 +141,29 @@ class JobStore:
             "subtitles": base / "subtitles.srt",
             "output": base / "output.mp4",
             "transcript": base / "transcript.json",
+            "scenes_artifact": base / "scenes.json",
         }
+
+    def set_segmentation_progress(
+        self,
+        job_id: str,
+        *,
+        percent: int,
+        message: str,
+        scenes_completed: int = 0,
+    ) -> JobRecord:
+        """Update job progress during the segmentation step."""
+        record = self.get(job_id)
+        pipeline_percent = 30 + int(percent * 0.2)
+        record.progress = JobProgress(
+            step=PipelineStep.SEGMENT,
+            percent=min(50, pipeline_percent),
+            message=message,
+        )
+        record.status = JobStatus.SEGMENTING
+        record.metadata["segmentation_progress"] = {
+            "percent": percent,
+            "scenes_completed": scenes_completed,
+        }
+        self.save(record)
+        return record

@@ -44,3 +44,14 @@ class TranscriptionError(FrameForgeError):
     ) -> None:
         self.cause = cause
         super().__init__(message, code="transcription_failed")
+
+
+class SegmentationError(FrameForgeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        cause: str | None = None,
+    ) -> None:
+        self.cause = cause
+        super().__init__(message, code="segmentation_failed")

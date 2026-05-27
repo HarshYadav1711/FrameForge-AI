@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
 
+    segmentation_backend: str = "auto"
+    segmentation_semantic_grouping: bool = True
+    scene_min_duration_seconds: float = 3.0
+    scene_max_duration_seconds: float = 90.0
+    scene_target_duration_seconds: float = 15.0
+
     video_width: int = 1920
     video_height: int = 1080
     video_fps: int = 30

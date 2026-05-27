@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 
 from app.config import Settings
-from app.core.exceptions import PipelineError, TranscriptionError
+from app.core.exceptions import PipelineError, SegmentationError, TranscriptionError
 from app.models.schemas import JobProgress, JobStatus, PipelineStep, TranscriptionProgress
 from app.services.job_store import JobStore
 from app.services.rendering import render_video
@@ -90,20 +90,47 @@ class PipelineOrchestrator:
                 job_id,
                 PipelineStep.SEGMENT,
                 30,
-                "Segmenting script into scenes…",
+                "Segmenting narration into scenes…",
             )
-            scenes = await segment_script(
-                record.script,
-                segments,
-                duration,
-                self._settings,
-            )
-            for i, scene in enumerate(scenes):
-                scenes[i] = scene.model_copy(update={"index": i})
+            timeline_blocks = []
+            if paths["transcript"].exists():
+                from app.services.transcription.formats import read_transcript_artifact
+
+                transcript_artifact = read_transcript_artifact(paths["transcript"])
+                timeline_blocks = transcript_artifact.timeline_blocks
+
+            try:
+                scenes = await segment_script(
+                    record.script,
+                    segments,
+                    duration,
+                    self._settings,
+                    timeline_blocks=timeline_blocks,
+                    scenes_out=paths["scenes_artifact"],
+                )
+            except SegmentationError as exc:
+                logger.error(
+                    "Segmentation failed for job %s: %s (cause=%s)",
+                    job_id,
+                    exc.message,
+                    exc.cause,
+                )
+                raise
 
             record = self._store.get(job_id)
             record.scenes = scenes
+            if paths["scenes_artifact"].exists():
+                from app.services.segmentation.formats import read_scenes_artifact
+
+                seg_artifact = read_scenes_artifact(paths["scenes_artifact"])
+                record.metadata["segmentation"] = seg_artifact.metadata.model_dump()
             self._store.save(record)
+            self._store.set_step(
+                job_id,
+                PipelineStep.SEGMENT,
+                50,
+                f"Segmentation complete ({len(scenes)} scenes)",
+            )
 
             # Step 3: Attach visuals
             self._store.set_step(
@@ -161,6 +188,20 @@ class PipelineOrchestrator:
                 ),
             )
             logger.info("Job %s completed", job_id)
+
+        except SegmentationError as exc:
+            logger.exception("Segmentation step failed for job %s", job_id)
+            self._store.update_status(
+                job_id,
+                JobStatus.FAILED,
+                error=exc.message,
+                progress=JobProgress(
+                    step=PipelineStep.SEGMENT,
+                    percent=0,
+                    message="Segmentation failed",
+                ),
+            )
+            raise PipelineError(exc.message, step="segment") from exc
 
         except TranscriptionError as exc:
             logger.exception("Transcription step failed for job %s", job_id)

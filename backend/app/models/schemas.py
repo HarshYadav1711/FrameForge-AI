@@ -98,6 +98,17 @@ class TranscriptResponse(BaseModel):
     metadata: TranscriptionMetadata = Field(default_factory=TranscriptionMetadata)
 
 
+class SceneMetadata(BaseModel):
+    """Per-scene metadata for timeline sync and future AI enhancements."""
+
+    source: str = "heuristic"
+    semantic_group: str | None = None
+    transcript_segment_start: int | None = None
+    transcript_segment_end: int | None = None
+    word_count: int = 0
+    duration_seconds: float | None = None
+
+
 class Scene(BaseModel):
     index: int
     title: str
@@ -106,6 +117,33 @@ class Scene(BaseModel):
     start_time: float | None = None
     end_time: float | None = None
     image_path: str | None = None
+    metadata: SceneMetadata | None = None
+
+
+class SegmentationMetadata(BaseModel):
+    scene_count: int = 0
+    total_duration_seconds: float = 0.0
+    source: str = "heuristic"
+    timeline_aligned: bool = False
+
+
+class SegmentationResult(BaseModel):
+    scenes: list[Scene] = Field(default_factory=list)
+    metadata: SegmentationMetadata = Field(default_factory=SegmentationMetadata)
+
+
+class SegmentationStatusSummary(BaseModel):
+    available: bool = False
+    scene_count: int | None = None
+    source: str | None = None
+    timeline_aligned: bool | None = None
+    total_duration_seconds: float | None = None
+
+
+class ScenesResponse(BaseModel):
+    job_id: str
+    scenes: list[Scene] = Field(default_factory=list)
+    metadata: SegmentationMetadata = Field(default_factory=SegmentationMetadata)
 
 
 class JobProgress(BaseModel):
@@ -125,6 +163,7 @@ class JobStatusResponse(BaseModel):
     video_url: str | None = None
     duration_seconds: float | None = None
     transcription: TranscriptionStatusSummary | None = None
+    segmentation: SegmentationStatusSummary | None = None
 
 
 class CreateJobResponse(BaseModel):
