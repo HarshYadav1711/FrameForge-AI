@@ -1,56 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { createJob, getJob } from "@/lib/api";
-import type { JobStatusResponse } from "@/types/job";
-import { JobProgressPanel } from "./job-progress";
+import { useState } from "react";
+import { Sparkles } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
+import { createJob } from "@/lib/api";
 import { UploadForm } from "./upload-form";
-import { VideoPreview } from "./video-preview";
-
-const POLL_MS = 2000;
-const TERMINAL = new Set(["completed", "failed"]);
+import { StudioJobWorkspace } from "./studio-job-workspace";
 
 export function Studio() {
   const [jobId, setJobId] = useState<string | null>(null);
-  const [job, setJob] = useState<JobStatusResponse | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  const poll = useCallback(async (id: string) => {
-    const data = await getJob(id);
-    setJob(data);
-    return data;
-  }, []);
-
-  useEffect(() => {
-    if (!jobId) return;
-    let active = true;
-
-    const tick = async () => {
-      try {
-        const data = await poll(jobId);
-        if (!active || TERMINAL.has(data.status)) return;
-      } catch {
-        /* retry on next interval */
-      }
-    };
-
-    tick();
-    const interval = setInterval(tick, POLL_MS);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [jobId, poll]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   async function handleSubmit(script: string, uploadId: string) {
     setSubmitting(true);
+    setSubmitError(null);
     try {
       const res = await createJob(script, uploadId);
       setJobId(res.id);
-      setJob(null);
-      await poll(res.id);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to start job");
+      throw err;
     } finally {
       setSubmitting(false);
     }
@@ -58,48 +28,51 @@ export function Studio() {
 
   function reset() {
     setJobId(null);
-    setJob(null);
+    setSubmitError(null);
   }
 
-  const processing = jobId && job && !TERMINAL.has(job.status);
-  const completed = job?.status === "completed";
-
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-8 lg:grid-cols-2">
-      <div className="space-y-6">
-        {!jobId ? (
-          <UploadForm disabled={submitting} onSubmit={handleSubmit} />
-        ) : (
-          <>
-            {job && <JobProgressPanel job={job} />}
-            {(completed || job?.status === "failed") && (
-              <Button variant="outline" onClick={reset} className="w-full">
-                Create another video
-              </Button>
-            )}
-          </>
-        )}
-      </div>
-
-      <div className="space-y-6">
-        {completed && jobId && <VideoPreview jobId={jobId} />}
-        {!jobId && (
-          <Alert className="border-border/60 bg-muted/30">
-            <AlertTitle>How it works</AlertTitle>
-            <AlertDescription className="mt-2 space-y-2 text-muted-foreground">
-              <p>1. Upload narration audio (MP3, WAV, M4A).</p>
-              <p>2. Paste your script — we transcribe and align scenes.</p>
-              <p>3. Ollama segments the script; visuals and subtitles are generated locally.</p>
-              <p>4. Download your edited MP4 when processing finishes.</p>
-            </AlertDescription>
-          </Alert>
-        )}
-        {processing && (
-          <p className="text-center text-sm text-muted-foreground lg:text-left">
-            First run may take longer while Whisper loads the model.
-          </p>
-        )}
-      </div>
+    <div className="grid gap-8 lg:grid-cols-12 lg:gap-10">
+      {!jobId ? (
+        <>
+          <div className="animate-in fade-in slide-in-from-left-4 duration-500 lg:col-span-5">
+            <UploadForm
+              disabled={submitting}
+              onSubmit={handleSubmit}
+              submitError={submitError}
+            />
+          </div>
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500 delay-150 lg:col-span-7">
+            <EmptyState
+              icon={Sparkles}
+              title="Ready when you are"
+              description="Upload narration audio and paste your script. FrameForge runs the full pipeline locally — transcription, scene breakdown, visuals, subtitles, and export."
+              className="min-h-[360px]"
+            >
+              <ol className="mt-2 space-y-2 text-left text-sm text-muted-foreground">
+                <li className="flex gap-2">
+                  <span className="font-mono text-primary">1</span>
+                  Upload MP3, WAV, or M4A narration
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-mono text-primary">2</span>
+                  Paste your full script for alignment
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-mono text-primary">3</span>
+                  Watch the pipeline run in real time
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-mono text-primary">4</span>
+                  Preview and download your MP4
+                </li>
+              </ol>
+            </EmptyState>
+          </div>
+        </>
+      ) : (
+        <StudioJobWorkspace key={jobId} jobId={jobId} onReset={reset} />
+      )}
     </div>
   );
 }

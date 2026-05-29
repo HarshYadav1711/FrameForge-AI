@@ -23,10 +23,12 @@ export function HealthBadge() {
     >
       {(data) => (
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="border-emerald-500/40 text-emerald-400">
+          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
             API {data.status}
           </Badge>
-          <Badge variant="secondary">Whisper: {data.whisper_model}</Badge>
+          <Badge variant="secondary" className="bg-muted/50">
+            Whisper: {data.whisper_model}
+          </Badge>
           {data.ollama_enabled && (
             <Badge variant="secondary">Ollama enabled</Badge>
           )}

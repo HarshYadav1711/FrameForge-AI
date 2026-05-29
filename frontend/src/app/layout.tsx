@@ -29,9 +29,9 @@ export default function RootLayout({
       lang="en"
       className={`dark ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">
+      <body className="flex min-h-full flex-col mesh-bg">
         <SiteHeader />
-        <div className="flex-1">{children}</div>
+        <main className="flex-1">{children}</main>
         <SiteFooter />
       </body>
     </html>

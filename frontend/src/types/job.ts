@@ -134,6 +134,53 @@ export interface ScenesResponse {
   metadata: SegmentationMetadata;
 }
 
+export type RenderPhase =
+  | "preparing"
+  | "composing"
+  | "encoding"
+  | "finalizing"
+  | "completed"
+  | "failed";
+
+export interface RenderingProgress {
+  phase: RenderPhase;
+  percent: number;
+  message: string;
+  attempt?: number;
+  frame?: number | null;
+  total_frames?: number | null;
+}
+
+export interface RenderOutputSummary {
+  path?: string;
+  file_size_bytes?: number;
+  duration_seconds?: number;
+  width?: number;
+  height?: number;
+  fps?: number;
+  video_codec?: string;
+  audio_codec?: string;
+}
+
+export interface JobMetadata {
+  transcription_progress?: {
+    phase?: string;
+    percent?: number;
+    segments_completed?: number;
+  };
+  segmentation_progress?: {
+    percent?: number;
+    scenes_completed?: number;
+  };
+  rendering_progress?: RenderingProgress;
+  render_output?: RenderOutputSummary;
+  visual_assembly?: {
+    entry_count?: number;
+    total_duration_seconds?: number;
+  };
+  [key: string]: unknown;
+}
+
 export interface JobStatusResponse {
   id: string;
   status: JobStatus;
@@ -146,6 +193,7 @@ export interface JobStatusResponse {
   duration_seconds: number | null;
   transcription: TranscriptionStatusSummary | null;
   segmentation: SegmentationStatusSummary | null;
+  metadata?: JobMetadata;
 }
 
 export interface CreateJobResponse {

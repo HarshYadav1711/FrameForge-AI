@@ -51,8 +51,8 @@ export function AudioDropzone({
         className={cn(
           "flex w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors",
           dragOver
-            ? "border-primary bg-primary/5"
-            : "border-border/80 hover:border-primary/50 hover:bg-muted/20",
+            ? "border-primary bg-primary/10 scale-[1.01] shadow-lg shadow-primary/10"
+            : "border-white/10 bg-muted/10 hover:border-primary/40 hover:bg-muted/20",
           disabled && "pointer-events-none opacity-50",
           hasFile && "py-6",
         )}

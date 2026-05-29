@@ -251,6 +251,7 @@ class JobStatusResponse(BaseModel):
     duration_seconds: float | None = None
     transcription: TranscriptionStatusSummary | None = None
     segmentation: SegmentationStatusSummary | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class CreateJobResponse(BaseModel):

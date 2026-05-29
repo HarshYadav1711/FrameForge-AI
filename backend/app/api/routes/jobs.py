@@ -133,6 +133,7 @@ def _to_status_response(job_id: str) -> JobStatusResponse:
         duration_seconds=record.duration_seconds,
         transcription=_transcription_summary(job_id, record),
         segmentation=_segmentation_summary(job_id, record),
+        metadata=record.metadata,
     )
 
 
