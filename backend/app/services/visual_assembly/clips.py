@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 from app.models.schemas import MediaType, VisualTimelineEntry
@@ -16,8 +15,6 @@ from app.services.visual_assembly.transitions import (
     apply_transition_in,
     transition_overlap_seconds,
 )
-
-logger = logging.getLogger(__name__)
 
 
 def _with_duration(clip, duration: float):
@@ -51,8 +48,8 @@ def build_scene_clip(
 
     media_path = Path(entry.media_path)
     if entry.media_type == MediaType.VIDEO:
-        if not media_path.exists() and entry.scene_index is not None:
-            logger.warning("Video path missing for scene %s, skipping", entry.scene_index)
+        if not media_path.exists():
+            raise FileNotFoundError(f"Video not found: {media_path}")
         clip = VideoFileClip(str(media_path))
         if clip.duration and clip.duration > entry.duration:
             clip = _subclip(clip, 0, entry.duration)

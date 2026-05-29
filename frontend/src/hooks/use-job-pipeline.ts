@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getJob } from "@/lib/api";
-import { STATUS_LABELS, stepIndex } from "@/lib/pipeline-steps";
+import { STATUS_LABELS } from "@/lib/pipeline-steps";
 import type { JobStatusResponse, PipelineStep } from "@/types/job";
 
 const POLL_MS = 1500;
@@ -148,8 +148,6 @@ export function useJobPipeline(jobId: string) {
   const terminal =
     job?.status === "completed" ? "completed" : job?.status === "failed" ? "failed" : null;
   const processing = job != null && !TERMINAL.has(job.status);
-  const currentStepIdx = stepIndex(job?.progress.step);
-
   return {
     job,
     logs,
@@ -157,7 +155,6 @@ export function useJobPipeline(jobId: string) {
     loading: loading && !job,
     processing,
     terminal,
-    currentStepIdx,
     refresh: () => poll(jobId),
   };
 }

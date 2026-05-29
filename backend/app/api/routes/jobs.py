@@ -12,14 +12,14 @@ from app.models.schemas import (
     JobStatusResponse,
     ScenesResponse,
     SegmentationStatusSummary,
-    TranscriptResponse,
     TranscriptionMetadata,
     TranscriptionStatusSummary,
+    TranscriptResponse,
 )
+from app.services.segmentation.base import build_segmentation_result
 from app.services.segmentation.formats import read_scenes_artifact
 from app.services.transcription.base import build_transcript_result
 from app.services.transcription.formats import read_transcript_artifact
-from app.pipeline.orchestrator import PipelineOrchestrator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -290,8 +290,6 @@ async def get_job_scenes(job_id: str) -> ScenesResponse:
             status_code=404,
             detail="Scenes not available yet",
         )
-
-    from app.services.segmentation.base import build_segmentation_result
 
     result = build_segmentation_result(
         record.scenes,

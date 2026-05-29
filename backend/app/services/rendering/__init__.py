@@ -5,13 +5,26 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.config import Settings
-from app.models.schemas import Scene, TranscriptSegment, VisualTimeline
-from app.services.rendering.config import RenderOutputConfig, render_config_from_settings
+from app.models.schemas import (
+    RenderingProgress,
+    Scene,
+    TranscriptSegment,
+    VisualTimeline,
+)
+from app.services.rendering.config import (
+    RenderOutputConfig,
+    render_config_from_settings,
+)
 from app.services.rendering.engine import VideoRenderEngine
-from app.services.rendering.formats import read_render_output_artifact, write_render_output_artifact
-from app.services.rendering.lifecycle import RenderLifecycle, pipeline_percent_from_render
+from app.services.rendering.formats import (
+    read_render_output_artifact,
+    write_render_output_artifact,
+)
+from app.services.rendering.lifecycle import (
+    RenderLifecycle,
+    pipeline_percent_from_render,
+)
 from app.services.rendering.metadata import build_output_metadata
-from app.models.schemas import RenderingProgress
 from app.services.rendering.progress import ProgressCallback
 from app.services.rendering.queue import RenderQueue, get_render_queue
 from app.services.rendering.request import RenderRequest
@@ -65,5 +78,6 @@ def render_video(
         state_path=state_path,
         work_dir=output_path.parent / settings.render_temp_subdir,
     )
-    path, _metadata = VideoRenderEngine(settings).render(request, on_progress=on_progress)
+    engine = VideoRenderEngine(settings)
+    path, _metadata = engine.render(request, on_progress=on_progress)
     return path

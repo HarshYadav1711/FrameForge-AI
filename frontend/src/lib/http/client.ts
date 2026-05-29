@@ -11,16 +11,38 @@ export class ApiError extends Error {
   }
 }
 
-async function parseErrorBody(res: Response): Promise<string> {
+interface ApiErrorPayload {
+  detail?: string | { msg?: string }[];
+  message?: string;
+  error?: string;
+  cause?: string;
+}
+
+async function parseErrorBody(
+  res: Response,
+): Promise<{ message: string; code?: string }> {
   try {
-    const data = await res.json();
-    if (typeof data.detail === "string") return data.detail;
-    if (Array.isArray(data.detail)) {
-      return data.detail.map((d: { msg?: string }) => d.msg ?? "Validation error").join("; ");
+    const data = (await res.json()) as ApiErrorPayload;
+    if (typeof data.detail === "string") {
+      return { message: data.detail };
     }
-    return data.message ?? data.error ?? res.statusText;
+    if (Array.isArray(data.detail)) {
+      return {
+        message: data.detail
+          .map((d) => d.msg ?? "Validation error")
+          .join("; "),
+      };
+    }
+    let message = data.message ?? res.statusText ?? "Request failed";
+    if (data.cause) {
+      message = `${message} (${data.cause})`;
+    }
+    return {
+      message,
+      code: typeof data.error === "string" ? data.error : undefined,
+    };
   } catch {
-    return res.statusText || "Request failed";
+    return { message: res.statusText || "Request failed" };
   }
 }
 
@@ -60,7 +82,8 @@ export async function apiRequest<T>(
   });
 
   if (!res.ok) {
-    throw new ApiError(await parseErrorBody(res), res.status);
+    const { message, code } = await parseErrorBody(res);
+    throw new ApiError(message, res.status, code);
   }
 
   if (res.status === 204) {

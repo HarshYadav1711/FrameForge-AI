@@ -1,3 +1,37 @@
+# Maps FrameForgeError.code to HTTP status (extend when adding new error types).
+ERROR_HTTP_STATUS: dict[str, int] = {
+    "job_not_found": 404,
+    "job_not_ready": 409,
+    "upload_not_found": 404,
+    "invalid_audio": 400,
+    "transcription_failed": 422,
+    "segmentation_failed": 422,
+    "visual_assembly_failed": 422,
+    "rendering_failed": 422,
+}
+
+
+def http_status_for_error_code(code: str) -> int:
+    if code.startswith("pipeline_"):
+        return 422
+    return ERROR_HTTP_STATUS.get(code, 500)
+
+
+def error_response_body(exc: "FrameForgeError") -> dict:
+    """JSON body for API error responses."""
+    body: dict = {"error": exc.code, "message": exc.message}
+    if cause := getattr(exc, "cause", None):
+        body["cause"] = cause
+    if scene_index := getattr(exc, "scene_index", None):
+        body["scene_index"] = scene_index
+    if phase := getattr(exc, "phase", None):
+        body["phase"] = phase
+    if attempt := getattr(exc, "attempt", None):
+        if isinstance(attempt, int) and attempt > 0:
+            body["attempt"] = attempt
+    return body
+
+
 class FrameForgeError(Exception):
     """Base application error."""
 

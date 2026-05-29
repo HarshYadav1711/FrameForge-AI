@@ -6,7 +6,14 @@ from uuid import uuid4
 
 from app.config import Settings
 from app.core.exceptions import JobNotFoundError
-from app.models.schemas import JobProgress, JobRecord, JobStatus, PipelineStep, RenderingProgress
+from app.models.schemas import (
+    JobProgress,
+    JobRecord,
+    JobStatus,
+    PipelineStep,
+    RenderingProgress,
+)
+from app.services.rendering.lifecycle import pipeline_percent_from_render
 
 logger = logging.getLogger(__name__)
 
@@ -154,8 +161,6 @@ class JobStore:
         progress: RenderingProgress,
     ) -> JobRecord:
         """Update job progress during the render step."""
-        from app.services.rendering.lifecycle import pipeline_percent_from_render
-
         record = self.get(job_id)
         pipeline_percent = pipeline_percent_from_render(progress)
         record.progress = JobProgress(

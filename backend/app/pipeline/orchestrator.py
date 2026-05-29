@@ -10,12 +10,21 @@ from app.core.exceptions import (
     TranscriptionError,
     VisualAssemblyError,
 )
-from app.models.schemas import JobProgress, JobStatus, PipelineStep, TranscriptionProgress
+from app.models.schemas import (
+    JobProgress,
+    JobStatus,
+    PipelineStep,
+    RenderingProgress,
+    TranscriptionProgress,
+)
 from app.services.job_store import JobStore
 from app.services.rendering import RenderRequest, VideoRenderEngine, get_render_queue
 from app.services.segmentation import segment_script
+from app.services.segmentation.formats import read_scenes_artifact
 from app.services.subtitles import generate_srt, subtitle_rendering_enabled
 from app.services.transcription import transcribe_audio
+from app.services.transcription.formats import read_transcript_artifact
+from app.services.visual_assembly import write_visual_timeline_artifact
 from app.services.visuals import attach_visuals
 
 logger = logging.getLogger(__name__)
@@ -27,6 +36,27 @@ class PipelineOrchestrator:
     def __init__(self, store: JobStore, settings: Settings) -> None:
         self._store = store
         self._settings = settings
+
+    def _fail_job(
+        self,
+        job_id: str,
+        message: str,
+        exc: Exception,
+        *,
+        step: PipelineStep | None = None,
+    ) -> None:
+        error = getattr(exc, "message", None) or str(exc)
+        progress = (
+            JobProgress(step=step, percent=0, message=message)
+            if step is not None
+            else JobProgress(percent=0, message=message)
+        )
+        self._store.update_status(
+            job_id,
+            JobStatus.FAILED,
+            error=error,
+            progress=progress,
+        )
 
     def _transcription_progress_handler(self, job_id: str):
         def on_progress(progress: TranscriptionProgress) -> None:
@@ -79,8 +109,6 @@ class PipelineOrchestrator:
             record.transcript = segments
             record.duration_seconds = duration
             if paths["transcript"].exists():
-                from app.services.transcription.formats import read_transcript_artifact
-
                 artifact = read_transcript_artifact(paths["transcript"])
                 record.metadata["transcription"] = artifact.metadata.model_dump()
             self._store.save(record)
@@ -100,8 +128,6 @@ class PipelineOrchestrator:
             )
             timeline_blocks = []
             if paths["transcript"].exists():
-                from app.services.transcription.formats import read_transcript_artifact
-
                 transcript_artifact = read_transcript_artifact(paths["transcript"])
                 timeline_blocks = transcript_artifact.timeline_blocks
 
@@ -126,8 +152,6 @@ class PipelineOrchestrator:
             record = self._store.get(job_id)
             record.scenes = scenes
             if paths["scenes_artifact"].exists():
-                from app.services.segmentation.formats import read_scenes_artifact
-
                 seg_artifact = read_scenes_artifact(paths["scenes_artifact"])
                 record.metadata["segmentation"] = seg_artifact.metadata.model_dump()
             self._store.save(record)
@@ -161,8 +185,6 @@ class PipelineOrchestrator:
                     exc.scene_index,
                 )
                 raise
-
-            from app.services.visual_assembly import write_visual_timeline_artifact
 
             write_visual_timeline_artifact(visual_timeline, paths["visual_timeline"])
 
@@ -208,7 +230,7 @@ class PipelineOrchestrator:
                 work_dir=paths["render_temp"],
             )
 
-            def on_render_progress(progress):
+            def on_render_progress(progress: RenderingProgress) -> None:
                 self._store.set_rendering_progress(job_id, progress)
 
             _output_path, render_metadata = await get_render_queue().run(
@@ -235,68 +257,35 @@ class PipelineOrchestrator:
 
         except RenderingError as exc:
             logger.exception("Render step failed for job %s", job_id)
-            self._store.update_status(
-                job_id,
-                JobStatus.FAILED,
-                error=exc.message,
-                progress=JobProgress(
-                    step=PipelineStep.RENDER,
-                    percent=0,
-                    message="Rendering failed",
-                ),
+            self._fail_job(
+                job_id, "Rendering failed", exc, step=PipelineStep.RENDER
             )
             raise PipelineError(exc.message, step="render") from exc
 
         except VisualAssemblyError as exc:
             logger.exception("Visual assembly step failed for job %s", job_id)
-            self._store.update_status(
-                job_id,
-                JobStatus.FAILED,
-                error=exc.message,
-                progress=JobProgress(
-                    step=PipelineStep.VISUALS,
-                    percent=0,
-                    message="Visual assembly failed",
-                ),
+            self._fail_job(
+                job_id, "Visual assembly failed", exc, step=PipelineStep.VISUALS
             )
             raise PipelineError(exc.message, step="visuals") from exc
 
         except SegmentationError as exc:
             logger.exception("Segmentation step failed for job %s", job_id)
-            self._store.update_status(
-                job_id,
-                JobStatus.FAILED,
-                error=exc.message,
-                progress=JobProgress(
-                    step=PipelineStep.SEGMENT,
-                    percent=0,
-                    message="Segmentation failed",
-                ),
+            self._fail_job(
+                job_id, "Segmentation failed", exc, step=PipelineStep.SEGMENT
             )
             raise PipelineError(exc.message, step="segment") from exc
 
         except TranscriptionError as exc:
             logger.exception("Transcription step failed for job %s", job_id)
-            self._store.update_status(
-                job_id,
-                JobStatus.FAILED,
-                error=exc.message,
-                progress=JobProgress(
-                    step=PipelineStep.TRANSCRIBE,
-                    percent=0,
-                    message="Transcription failed",
-                ),
+            self._fail_job(
+                job_id, "Transcription failed", exc, step=PipelineStep.TRANSCRIBE
             )
             raise PipelineError(exc.message, step="transcribe") from exc
 
         except Exception as exc:
             logger.exception("Pipeline failed for job %s", job_id)
-            self._store.update_status(
-                job_id,
-                JobStatus.FAILED,
-                error=str(exc),
-                progress=JobProgress(percent=0, message="Pipeline failed"),
-            )
+            self._fail_job(job_id, "Pipeline failed", exc)
             raise PipelineError(str(exc), step="orchestrator") from exc
 
     @staticmethod

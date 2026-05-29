@@ -59,20 +59,6 @@ export function stepIndex(step: PipelineStep | null | undefined): number {
   return PIPELINE_STEPS.findIndex((s) => s.key === step);
 }
 
-export function statusToStep(status: JobStatus): PipelineStep | null {
-  const map: Record<JobStatus, PipelineStep | null> = {
-    pending: "transcribe",
-    transcribing: "transcribe",
-    segmenting: "segment",
-    attaching_visuals: "visuals",
-    generating_subtitles: "subtitles",
-    rendering: "render",
-    completed: "render",
-    failed: null,
-  };
-  return map[status] ?? null;
-}
-
 export function stepState(
   stepKey: PipelineStep,
   currentStep: PipelineStep | null | undefined,
