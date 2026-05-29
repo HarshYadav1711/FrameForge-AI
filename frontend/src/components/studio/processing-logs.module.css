@@ -1,0 +1,13 @@
+.logScroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.logScroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.logScroll::-webkit-scrollbar-thumb {
+  background-color: oklch(0.35 0.04 265);
+  border-radius: 4px;
+}

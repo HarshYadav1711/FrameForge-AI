@@ -58,6 +58,10 @@ def align_drafts_to_timeline(
             seg_idx += 1
 
         end_idx = max(seg_idx - 1, start_idx)
+        if segments:
+            last = len(segments) - 1
+            start_idx = min(max(0, start_idx), last)
+            end_idx = min(max(start_idx, end_idx), last)
         aligned.append(
             SceneDraft(
                 title=draft.title,
@@ -98,19 +102,64 @@ def _timestamps_from_segments(
     for draft in mapped:
         start_idx = draft.transcript_segment_start
         end_idx = draft.transcript_segment_end
-        if start_idx is not None and end_idx is not None:
+        if start_idx is not None and end_idx is not None and segments:
+            last = len(segments) - 1
+            start_idx = min(max(0, start_idx), last)
+            end_idx = min(max(start_idx, end_idx), last)
             start = segments[start_idx].start
-            end = segments[min(end_idx, len(segments) - 1)].end
+            end = segments[end_idx].end
         else:
             start, end = 0.0, total_duration
 
         timed.append((draft, round(start, 3), round(end, 3)))
+
+    timed = _split_overlapping_windows(timed, total_duration)
 
     if timed and total_duration > 0:
         last_draft, last_start, _ = timed[-1]
         timed[-1] = (last_draft, last_start, round(total_duration, 3))
 
     return timed
+
+
+def _split_overlapping_windows(
+    timed: list[tuple[SceneDraft, float, float]],
+    total_duration: float,
+) -> list[tuple[SceneDraft, float, float]]:
+    """
+    Subdivide shared segment windows when more drafts exist than transcript segments.
+
+    LLM segmentation often produces more scenes than Whisper segments; without this
+    pass, clamped indices collapse to identical start/end times for multiple scenes.
+    """
+    if len(timed) <= 1:
+        return timed
+
+    result: list[tuple[SceneDraft, float, float]] = []
+    i = 0
+    while i < len(timed):
+        draft, start, end = timed[i]
+        j = i + 1
+        while j < len(timed) and timed[j][1] == start and timed[j][2] == end:
+            j += 1
+        group = timed[i:j]
+        if len(group) == 1:
+            result.append(group[0])
+        else:
+            weights = [max(len(item[0].narration.split()), 1) for item in group]
+            total_weight = sum(weights)
+            span = max(end - start, 0.0)
+            cursor = start
+            for k, (group_draft, _, _) in enumerate(group):
+                if k == len(group) - 1:
+                    part_end = end
+                else:
+                    part_end = cursor + span * (weights[k] / total_weight)
+                result.append((group_draft, round(cursor, 3), round(part_end, 3)))
+                cursor = part_end
+        i = j
+
+    return result
 
 
 def _timestamps_proportional(

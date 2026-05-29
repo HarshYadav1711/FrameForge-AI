@@ -174,9 +174,4 @@
       background-position: -100% 0;
     }
   }
-
-  .log-scrollbar {
-    scrollbar-width: thin;
-    scrollbar-color: oklch(0.35 0.04 265) transparent;
-  }
 }

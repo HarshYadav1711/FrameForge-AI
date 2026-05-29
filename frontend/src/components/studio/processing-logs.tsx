@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { Terminal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ProcessingLogEntry } from "@/hooks/use-job-pipeline";
+import styles from "./processing-logs.module.css";
 
 interface ProcessingLogsPanelProps {
   logs: ProcessingLogEntry[];
@@ -49,7 +50,10 @@ export function ProcessingLogsPanel({
         )}
       </div>
       <div
-        className="log-scrollbar max-h-[220px] overflow-y-auto bg-black/30 px-4 py-3 font-mono text-xs leading-relaxed"
+        className={cn(
+          styles.logScroll,
+          "max-h-[220px] overflow-y-auto bg-black/30 px-4 py-3 font-mono text-xs leading-relaxed",
+        )}
         role="log"
         aria-live="polite"
         aria-relevant="additions"

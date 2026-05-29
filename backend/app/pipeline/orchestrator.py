@@ -46,6 +46,9 @@ class PipelineOrchestrator:
         step: PipelineStep | None = None,
     ) -> None:
         error = getattr(exc, "message", None) or str(exc)
+        cause = getattr(exc, "cause", None)
+        if cause and cause not in error:
+            error = f"{error}: {cause}"
         progress = (
             JobProgress(step=step, percent=0, message=message)
             if step is not None
