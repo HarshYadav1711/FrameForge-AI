@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from app.config import Settings
 from app.core.exceptions import JobNotFoundError
-from app.models.schemas import JobProgress, JobRecord, JobStatus, PipelineStep
+from app.models.schemas import JobProgress, JobRecord, JobStatus, PipelineStep, RenderingProgress
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +143,30 @@ class JobStore:
             "transcript": base / "transcript.json",
             "scenes_artifact": base / "scenes.json",
             "visual_timeline": base / "visual_timeline.json",
+            "render_output": base / "render_output.json",
+            "render_state": base / "render_state.json",
+            "render_temp": base / "render_tmp",
         }
+
+    def set_rendering_progress(
+        self,
+        job_id: str,
+        progress: RenderingProgress,
+    ) -> JobRecord:
+        """Update job progress during the render step."""
+        from app.services.rendering.lifecycle import pipeline_percent_from_render
+
+        record = self.get(job_id)
+        pipeline_percent = pipeline_percent_from_render(progress)
+        record.progress = JobProgress(
+            step=PipelineStep.RENDER,
+            percent=pipeline_percent,
+            message=progress.message,
+        )
+        record.status = JobStatus.RENDERING
+        record.metadata["rendering_progress"] = progress.model_dump()
+        self.save(record)
+        return record
 
     def set_segmentation_progress(
         self,

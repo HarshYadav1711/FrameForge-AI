@@ -68,3 +68,20 @@ class VisualAssemblyError(FrameForgeError):
         self.scene_index = scene_index
         self.cause = cause
         super().__init__(message, code="visual_assembly_failed")
+
+
+class RenderingError(FrameForgeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        attempt: int = 1,
+        phase: str | None = None,
+        cause: str | None = None,
+        recoverable: bool = False,
+    ) -> None:
+        self.attempt = attempt
+        self.phase = phase
+        self.cause = cause
+        self.recoverable = recoverable
+        super().__init__(message, code="rendering_failed")

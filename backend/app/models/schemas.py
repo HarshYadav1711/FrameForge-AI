@@ -197,6 +197,42 @@ class ScenesResponse(BaseModel):
     metadata: SegmentationMetadata = Field(default_factory=SegmentationMetadata)
 
 
+class RenderPhase(str, Enum):
+    PREPARING = "preparing"
+    COMPOSING = "composing"
+    ENCODING = "encoding"
+    FINALIZING = "finalizing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class RenderingProgress(BaseModel):
+    """Fine-grained progress during the render step."""
+
+    phase: RenderPhase = RenderPhase.PREPARING
+    percent: int = 0
+    message: str = ""
+    attempt: int = 1
+    frame: int | None = None
+    total_frames: int | None = None
+
+
+class RenderOutputMetadata(BaseModel):
+    """Metadata for the exported MP4."""
+
+    path: str
+    file_size_bytes: int = 0
+    duration_seconds: float = 0.0
+    width: int = 0
+    height: int = 0
+    fps: float = 0.0
+    video_codec: str = ""
+    audio_codec: str = ""
+    video_bitrate_kbps: int | None = None
+    audio_bitrate_kbps: int | None = None
+    encoded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class JobProgress(BaseModel):
     step: PipelineStep | None = None
     percent: int = 0

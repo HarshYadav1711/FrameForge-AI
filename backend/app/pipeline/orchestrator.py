@@ -5,13 +5,14 @@ from pathlib import Path
 from app.config import Settings
 from app.core.exceptions import (
     PipelineError,
+    RenderingError,
     SegmentationError,
     TranscriptionError,
     VisualAssemblyError,
 )
 from app.models.schemas import JobProgress, JobStatus, PipelineStep, TranscriptionProgress
 from app.services.job_store import JobStore
-from app.services.rendering import render_video
+from app.services.rendering import RenderRequest, VideoRenderEngine, get_render_queue
 from app.services.segmentation import segment_script
 from app.services.subtitles import generate_srt, subtitle_rendering_enabled
 from app.services.transcription import transcribe_audio
@@ -190,16 +191,36 @@ class PipelineOrchestrator:
                 85,
                 "Rendering final video…",
             )
-            await asyncio.to_thread(
-                render_video,
-                scenes,
-                audio_path,
-                paths["output"],
-                self._settings,
+            engine = VideoRenderEngine(self._settings)
+            render_request = RenderRequest(
+                scenes=scenes,
+                audio_path=audio_path,
+                output_path=paths["output"],
+                settings=self._settings,
                 srt_path=paths["subtitles"],
-                transcript_segments=segments if subtitle_rendering_enabled(self._settings) else None,
+                transcript_segments=segments
+                if subtitle_rendering_enabled(self._settings)
+                else None,
                 visual_timeline=visual_timeline,
+                job_id=job_id,
+                metadata_path=paths["render_output"],
+                state_path=paths["render_state"],
+                work_dir=paths["render_temp"],
             )
+
+            def on_render_progress(progress):
+                self._store.set_rendering_progress(job_id, progress)
+
+            _output_path, render_metadata = await get_render_queue().run(
+                lambda: engine.render(
+                    render_request, on_progress=on_render_progress
+                ),
+                job_id=job_id,
+            )
+
+            record = self._store.get(job_id)
+            record.metadata["render_output"] = render_metadata.model_dump(mode="json")
+            self._store.save(record)
 
             self._store.update_status(
                 job_id,
@@ -211,6 +232,20 @@ class PipelineOrchestrator:
                 ),
             )
             logger.info("Job %s completed", job_id)
+
+        except RenderingError as exc:
+            logger.exception("Render step failed for job %s", job_id)
+            self._store.update_status(
+                job_id,
+                JobStatus.FAILED,
+                error=exc.message,
+                progress=JobProgress(
+                    step=PipelineStep.RENDER,
+                    percent=0,
+                    message="Rendering failed",
+                ),
+            )
+            raise PipelineError(exc.message, step="render") from exc
 
         except VisualAssemblyError as exc:
             logger.exception("Visual assembly step failed for job %s", job_id)

@@ -1,8 +1,14 @@
+"""Compose visuals, subtitles, and narration into a single video clip."""
+
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 
 from app.config import Settings
 from app.models.schemas import Scene, TranscriptSegment, VisualTimeline
+from app.services.rendering.cleanup import ClipResourceManager
+from app.services.rendering.config import RenderOutputConfig
 from app.services.subtitles import (
     build_subtitle_overlay_clips,
     composite_with_subtitles,
@@ -23,21 +29,28 @@ def _with_duration(clip, duration: float):
     return clip.set_duration(duration)
 
 
-def render_video(
+class ComposedVideo:
+    """Final clip plus resources to close after export."""
+
+    def __init__(self, clip, resources: ClipResourceManager, *, duration: float) -> None:
+        self.clip = clip
+        self.resources = resources
+        self.duration = duration
+
+
+def compose_video(
     scenes: list[Scene],
     audio_path: Path,
-    output_path: Path,
     settings: Settings,
+    config: RenderOutputConfig,
+    resources: ClipResourceManager,
     *,
     srt_path: Path | None = None,
     transcript_segments: list[TranscriptSegment] | None = None,
     visual_timeline: VisualTimeline | None = None,
-) -> str:
+) -> ComposedVideo:
     """
-    Compose scene visuals + narration audio into final MP4.
-
-    Uses the visual timeline when provided; otherwise builds one from scenes.
-    Supports static images, video clips, and configurable transitions.
+    Build a composite clip: scene visuals + burned-in subtitles + narration audio.
     """
     AudioFileClip = import_audio_file_clip()
     CompositeVideoClip = import_composite_video_clip()
@@ -45,22 +58,25 @@ def render_video(
     if not scenes:
         raise ValueError("No scenes to render")
 
-    audio = AudioFileClip(str(audio_path))
-    duration = audio.duration
-    video_size = (settings.video_width, settings.video_height)
+    audio = resources.track(AudioFileClip(str(audio_path)))
+    duration = float(audio.duration or 0.0)
+    if duration <= 0:
+        raise ValueError("Narration audio has no duration")
 
     timeline = visual_timeline or build_visual_timeline(scenes, duration, settings)
     if not timeline.entries:
         raise ValueError("No valid visual timeline entries")
 
-    clips = build_clips_from_timeline(timeline.entries, video_size)
-    if not clips:
+    scene_clips = build_clips_from_timeline(timeline.entries, config.size)
+    if not scene_clips:
         raise ValueError("No valid scene clips produced")
 
-    video = CompositeVideoClip(clips, size=video_size)
+    for clip in scene_clips:
+        resources.track(clip)
+
+    video = resources.track(CompositeVideoClip(scene_clips, size=config.size))
     video = _with_duration(video, duration)
 
-    subtitle_clips: list = []
     if subtitle_rendering_enabled(settings):
         cues = load_subtitle_cues(
             segments=transcript_segments,
@@ -69,9 +85,11 @@ def render_video(
         if cues:
             style = resolve_style_for_video(settings)
             subtitle_clips = build_subtitle_overlay_clips(cues, style)
+            for sub in subtitle_clips:
+                resources.track(sub)
             video = composite_with_subtitles(video, subtitle_clips)
             logger.info(
-                "Applied cinematic subtitles (%d cues, theme=%s)",
+                "Composed subtitles (%d cues, theme=%s)",
                 len(cues),
                 style.theme_name,
             )
@@ -83,24 +101,5 @@ def render_video(
     else:
         final = video.set_audio(audio)
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    final.write_videofile(
-        str(output_path),
-        fps=settings.video_fps,
-        codec="libx264",
-        audio_codec="aac",
-        preset="medium",
-        threads=4,
-        logger=None,
-    )
-
-    audio.close()
-    final.close()
-    for c in clips + subtitle_clips:
-        try:
-            c.close()
-        except Exception:
-            pass
-
-    logger.info("Rendered video -> %s", output_path)
-    return str(output_path)
+    resources.track(final)
+    return ComposedVideo(final, resources, duration=duration)

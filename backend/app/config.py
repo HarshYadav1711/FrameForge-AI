@@ -66,6 +66,19 @@ class Settings(BaseSettings):
     subtitle_animation_seconds: float = 0.22
     subtitle_font_path: str = ""
 
+    render_video_codec: str = "libx264"
+    render_audio_codec: str = "aac"
+    render_preset: str = "medium"
+    render_crf: int = 23
+    render_threads: int = 4
+    render_audio_bitrate: str = "192k"
+    render_video_bitrate: str | None = None
+    render_pixel_format: str = "yuv420p"
+    render_faststart: bool = True
+    render_max_attempts: int = 2
+    render_retry_delay_seconds: float = 1.0
+    render_temp_subdir: str = "render_tmp"
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
