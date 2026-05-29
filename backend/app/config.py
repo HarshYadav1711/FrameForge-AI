@@ -48,6 +48,17 @@ class Settings(BaseSettings):
     video_height: int = 1080
     video_fps: int = 30
 
+    subtitle_enabled: bool = True
+    subtitle_theme: str = "cinematic"
+    subtitle_position: str = "bottom"
+    subtitle_margin_ratio: float = 0.075
+    subtitle_max_width_ratio: float = 0.85
+    subtitle_font_size_ratio: float = 0.042
+    subtitle_line_spacing_ratio: float = 0.35
+    subtitle_animation: str = "fade"
+    subtitle_animation_seconds: float = 0.22
+    subtitle_font_path: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

@@ -8,7 +8,7 @@ from app.models.schemas import JobProgress, JobStatus, PipelineStep, Transcripti
 from app.services.job_store import JobStore
 from app.services.rendering import render_video
 from app.services.segmentation import segment_script
-from app.services.subtitles import generate_srt
+from app.services.subtitles import generate_srt, subtitle_rendering_enabled
 from app.services.transcription import transcribe_audio
 from app.services.visuals import attach_visuals
 
@@ -176,6 +176,7 @@ class PipelineOrchestrator:
                 paths["output"],
                 self._settings,
                 srt_path=paths["subtitles"],
+                transcript_segments=segments if subtitle_rendering_enabled(self._settings) else None,
             )
 
             self._store.update_status(
