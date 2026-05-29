@@ -59,7 +59,10 @@ export function ProcessingLogsPanel({
         ) : (
           <ul className="space-y-1.5">
             {logs.map((entry) => (
-              <li key={entry.id} className="flex gap-2 animate-in fade-in slide-in-from-bottom-1 duration-200">
+              <li
+                key={entry.id}
+                className="flex gap-2 animate-in fade-in slide-in-from-bottom-1 duration-200"
+              >
                 <span className="shrink-0 tabular-nums text-muted-foreground/70">
                   {entry.at}
                 </span>

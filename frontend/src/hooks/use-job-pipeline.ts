@@ -7,6 +7,7 @@ import type { JobStatusResponse, PipelineStep } from "@/types/job";
 
 const POLL_MS = 1500;
 const TERMINAL = new Set(["completed", "failed"]);
+const MAX_LOG_ENTRIES = 80;
 
 export type LogLevel = "info" | "success" | "warn" | "error";
 
@@ -30,28 +31,24 @@ function formatTime(iso: string): string {
   }
 }
 
-function initialLog(): ProcessingLogEntry[] {
-  return [
-    {
-      id: "init",
-      at: formatTime(new Date().toISOString()),
-      level: "info",
-      message: "Job queued — starting pipeline",
-      step: "transcribe",
-    },
-  ];
+function createLogId(seq: { current: number }): string {
+  seq.current += 1;
+  return `log-${seq.current}`;
 }
 
-function logsFromJob(
+function appendLogsFromJob(
   job: JobStatusResponse,
   prev: ProcessingLogEntry[],
+  seen: Set<string>,
+  nextId: () => string,
 ): ProcessingLogEntry[] {
   const entries = [...prev];
+
   const push = (level: LogLevel, message: string, step?: PipelineStep | null) => {
-    const last = entries[entries.length - 1];
-    if (last?.message === message) return;
+    if (seen.has(message)) return;
+    seen.add(message);
     entries.push({
-      id: `${job.updated_at}-${entries.length}-${message.slice(0, 24)}`,
+      id: nextId(),
       at: formatTime(job.updated_at),
       level,
       message,
@@ -63,8 +60,11 @@ function logsFromJob(
   push("info", statusLine, job.progress.step);
 
   const rp = job.metadata?.rendering_progress;
-  if (rp?.message && rp.message !== job.progress.message) {
-    push("info", `Encode: ${rp.message}`, "render");
+  if (rp?.message) {
+    const encodeLine = `Encode [${rp.phase}]: ${rp.message}`;
+    if (encodeLine !== statusLine) {
+      push("info", encodeLine, "render");
+    }
   }
 
   const tp = job.metadata?.transcription_progress;
@@ -93,33 +93,83 @@ function logsFromJob(
     push("success", "Video ready for preview", "render");
   }
 
-  return entries.slice(-80);
+  return entries.slice(-MAX_LOG_ENTRIES);
 }
 
 /** Poll job status. Mount only while a job is active (e.g. `key={jobId}`). */
 export function useJobPipeline(jobId: string) {
   const [job, setJob] = useState<JobStatusResponse | null>(null);
-  const [logs, setLogs] = useState<ProcessingLogEntry[]>(initialLog);
+  const [logs, setLogs] = useState<ProcessingLogEntry[]>(() => {
+    const seq = { current: 0 };
+    return [
+      {
+        id: createLogId(seq),
+        at: formatTime(new Date().toISOString()),
+        level: "info",
+        message: "Job queued — starting pipeline",
+        step: "transcribe",
+      },
+    ];
+  });
   const [pollError, setPollError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const logSeq = useRef(1);
+  const seenMessages = useRef(new Set<string>(["Job queued — starting pipeline"]));
   const lastStatus = useRef<string | null>(null);
   const lastStep = useRef<string | null>(null);
+  const lastProgressMessage = useRef<string | null>(null);
+  const lastWhisperKey = useRef<string | null>(null);
+  const lastRenderKey = useRef<string | null>(null);
 
-  const poll = useCallback(async (id: string) => {
-    const data = await getJob(id);
-    setJob(data);
-    setPollError(null);
+  const nextLogId = useCallback(() => createLogId(logSeq), []);
 
-    const statusChanged = lastStatus.current !== data.status;
-    const stepChanged = lastStep.current !== (data.progress.step ?? "");
-    if (statusChanged || stepChanged || data.progress.message) {
-      setLogs((prev) => logsFromJob(data, prev));
-      lastStatus.current = data.status;
-      lastStep.current = data.progress.step ?? "";
-    }
+  const poll = useCallback(
+    async (id: string) => {
+      const data = await getJob(id);
+      setJob(data);
+      setPollError(null);
 
-    return data;
-  }, []);
+      const statusChanged = lastStatus.current !== data.status;
+      const stepChanged = lastStep.current !== (data.progress.step ?? "");
+      const progressMessageChanged =
+        lastProgressMessage.current !== (data.progress.message ?? "");
+
+      const tp = data.metadata?.transcription_progress;
+      const whisperKey =
+        tp?.segments_completed != null
+          ? `${tp.segments_completed}:${tp.percent ?? 0}`
+          : null;
+      const whisperChanged = whisperKey !== lastWhisperKey.current;
+
+      const rp = data.metadata?.rendering_progress;
+      const renderKey = rp ? `${rp.phase}:${rp.percent}:${rp.message}` : null;
+      const renderChanged = renderKey !== lastRenderKey.current;
+
+      const shouldAppendLogs =
+        statusChanged ||
+        stepChanged ||
+        progressMessageChanged ||
+        whisperChanged ||
+        renderChanged ||
+        data.status === "completed" ||
+        data.status === "failed";
+
+      if (shouldAppendLogs) {
+        setLogs((prev) =>
+          appendLogsFromJob(data, prev, seenMessages.current, nextLogId),
+        );
+        lastStatus.current = data.status;
+        lastStep.current = data.progress.step ?? "";
+        lastProgressMessage.current = data.progress.message ?? "";
+        lastWhisperKey.current = whisperKey;
+        lastRenderKey.current = renderKey;
+      }
+
+      return data;
+    },
+    [nextLogId],
+  );
 
   useEffect(() => {
     let active = true;
@@ -148,6 +198,7 @@ export function useJobPipeline(jobId: string) {
   const terminal =
     job?.status === "completed" ? "completed" : job?.status === "failed" ? "failed" : null;
   const processing = job != null && !TERMINAL.has(job.status);
+
   return {
     job,
     logs,
