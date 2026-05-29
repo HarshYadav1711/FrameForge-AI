@@ -142,6 +142,7 @@ class JobStore:
             "output": base / "output.mp4",
             "transcript": base / "transcript.json",
             "scenes_artifact": base / "scenes.json",
+            "visual_timeline": base / "visual_timeline.json",
         }
 
     def set_segmentation_progress(

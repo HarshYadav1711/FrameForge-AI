@@ -55,3 +55,16 @@ class SegmentationError(FrameForgeError):
     ) -> None:
         self.cause = cause
         super().__init__(message, code="segmentation_failed")
+
+
+class VisualAssemblyError(FrameForgeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        scene_index: int | None = None,
+        cause: str | None = None,
+    ) -> None:
+        self.scene_index = scene_index
+        self.cause = cause
+        super().__init__(message, code="visual_assembly_failed")

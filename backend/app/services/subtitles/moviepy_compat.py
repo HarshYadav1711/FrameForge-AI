@@ -42,6 +42,17 @@ def import_audio_file_clip():
         return AudioFileClip
 
 
+def import_video_file_clip():
+    try:
+        from moviepy import VideoFileClip
+
+        return VideoFileClip
+    except ImportError:
+        from moviepy.editor import VideoFileClip
+
+        return VideoFileClip
+
+
 def rgba_array_to_clip(rgba: np.ndarray, duration: float):
     """Create a video clip from an RGBA numpy array."""
     ImageClip = import_image_clip()

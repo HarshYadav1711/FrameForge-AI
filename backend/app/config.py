@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     video_height: int = 1080
     video_fps: int = 30
 
+    visual_default_transition: str = "fade"
+    visual_transition_seconds: float = 0.5
+    visual_crossfade_seconds: float = 0.35
+    visual_min_scene_seconds: float = 0.5
+    visual_max_asset_bytes: int = 100 * 1024 * 1024
+    visual_jpeg_quality: int = 92
+
     subtitle_enabled: bool = True
     subtitle_theme: str = "cinematic"
     subtitle_position: str = "bottom"

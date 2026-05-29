@@ -3,7 +3,12 @@ import logging
 from pathlib import Path
 
 from app.config import Settings
-from app.core.exceptions import PipelineError, SegmentationError, TranscriptionError
+from app.core.exceptions import (
+    PipelineError,
+    SegmentationError,
+    TranscriptionError,
+    VisualAssemblyError,
+)
 from app.models.schemas import JobProgress, JobStatus, PipelineStep, TranscriptionProgress
 from app.services.job_store import JobStore
 from app.services.rendering import render_video
@@ -139,14 +144,30 @@ class PipelineOrchestrator:
                 50,
                 "Generating scene visuals…",
             )
-            scenes = await asyncio.to_thread(
-                attach_visuals,
-                scenes,
-                paths["visuals"],
-                self._settings,
-            )
+            try:
+                scenes, visual_timeline = await asyncio.to_thread(
+                    attach_visuals,
+                    scenes,
+                    paths["visuals"],
+                    self._settings,
+                    total_duration=duration,
+                )
+            except VisualAssemblyError as exc:
+                logger.error(
+                    "Visual assembly failed for job %s: %s (scene=%s)",
+                    job_id,
+                    exc.message,
+                    exc.scene_index,
+                )
+                raise
+
+            from app.services.visual_assembly import write_visual_timeline_artifact
+
+            write_visual_timeline_artifact(visual_timeline, paths["visual_timeline"])
+
             record = self._store.get(job_id)
             record.scenes = scenes
+            record.metadata["visual_assembly"] = visual_timeline.metadata.model_dump()
             self._store.save(record)
 
             # Step 4: Subtitles
@@ -177,6 +198,7 @@ class PipelineOrchestrator:
                 self._settings,
                 srt_path=paths["subtitles"],
                 transcript_segments=segments if subtitle_rendering_enabled(self._settings) else None,
+                visual_timeline=visual_timeline,
             )
 
             self._store.update_status(
@@ -189,6 +211,20 @@ class PipelineOrchestrator:
                 ),
             )
             logger.info("Job %s completed", job_id)
+
+        except VisualAssemblyError as exc:
+            logger.exception("Visual assembly step failed for job %s", job_id)
+            self._store.update_status(
+                job_id,
+                JobStatus.FAILED,
+                error=exc.message,
+                progress=JobProgress(
+                    step=PipelineStep.VISUALS,
+                    percent=0,
+                    message="Visual assembly failed",
+                ),
+            )
+            raise PipelineError(exc.message, step="visuals") from exc
 
         except SegmentationError as exc:
             logger.exception("Segmentation step failed for job %s", job_id)

@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 
 from app.config import Settings
-from app.models.schemas import Scene, TranscriptSegment
+from app.models.schemas import Scene, TranscriptSegment, VisualTimeline
 from app.services.subtitles import (
     build_subtitle_overlay_clips,
     composite_with_subtitles,
@@ -10,7 +10,9 @@ from app.services.subtitles import (
     resolve_style_for_video,
     subtitle_rendering_enabled,
 )
-from app.services.subtitles.moviepy_compat import import_audio_file_clip, import_composite_video_clip, import_image_clip
+from app.services.subtitles.moviepy_compat import import_audio_file_clip, import_composite_video_clip
+from app.services.visual_assembly.clips import build_clips_from_timeline
+from app.services.visual_assembly.timeline import build_visual_timeline
 
 logger = logging.getLogger(__name__)
 
@@ -21,18 +23,6 @@ def _with_duration(clip, duration: float):
     return clip.set_duration(duration)
 
 
-def _with_start(clip, start: float):
-    if hasattr(clip, "with_start"):
-        return clip.with_start(start)
-    return clip.set_start(start)
-
-
-def _resized(clip, size: tuple[int, int]):
-    if hasattr(clip, "resized"):
-        return clip.resized(new_size=size)
-    return clip.resize(size)
-
-
 def render_video(
     scenes: list[Scene],
     audio_path: Path,
@@ -41,15 +31,16 @@ def render_video(
     *,
     srt_path: Path | None = None,
     transcript_segments: list[TranscriptSegment] | None = None,
+    visual_timeline: VisualTimeline | None = None,
 ) -> str:
     """
-    Compose scene images + narration audio into final MP4.
+    Compose scene visuals + narration audio into final MP4.
 
-    Cinematic subtitles are burned in from transcript/SRT when enabled.
+    Uses the visual timeline when provided; otherwise builds one from scenes.
+    Supports static images, video clips, and configurable transitions.
     """
     AudioFileClip = import_audio_file_clip()
     CompositeVideoClip = import_composite_video_clip()
-    ImageClip = import_image_clip()
 
     if not scenes:
         raise ValueError("No scenes to render")
@@ -58,21 +49,11 @@ def render_video(
     duration = audio.duration
     video_size = (settings.video_width, settings.video_height)
 
-    clips = []
-    for scene in scenes:
-        if not scene.image_path or not Path(scene.image_path).exists():
-            continue
-        start = scene.start_time or 0.0
-        end = scene.end_time or duration
-        clip_duration = max(end - start, 0.5)
+    timeline = visual_timeline or build_visual_timeline(scenes, duration, settings)
+    if not timeline.entries:
+        raise ValueError("No valid visual timeline entries")
 
-        img_clip = _with_duration(ImageClip(scene.image_path), clip_duration)
-        img_clip = _resized(img_clip, video_size)
-
-        scene_clip = CompositeVideoClip([img_clip], size=video_size)
-        scene_clip = _with_start(scene_clip, start)
-        clips.append(scene_clip)
-
+    clips = build_clips_from_timeline(timeline.entries, video_size)
     if not clips:
         raise ValueError("No valid scene clips produced")
 

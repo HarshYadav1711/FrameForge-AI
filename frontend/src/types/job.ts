@@ -77,6 +77,21 @@ export interface TranscriptResponse {
   metadata: TranscriptionMetadata;
 }
 
+export type MediaType = "image" | "video" | "generated";
+
+export type TransitionType = "cut" | "fade" | "crossfade";
+
+export interface SceneVisualMetadata {
+  media_type: MediaType;
+  source_path: string | null;
+  normalized_path: string | null;
+  transition_in: TransitionType;
+  transition_duration_seconds: number;
+  width: number | null;
+  height: number | null;
+  duration_seconds: number | null;
+}
+
 export interface SceneMetadata {
   source: string;
   semantic_group: string | null;
@@ -84,6 +99,7 @@ export interface SceneMetadata {
   transcript_segment_end: number | null;
   word_count: number;
   duration_seconds: number | null;
+  visual?: SceneVisualMetadata | null;
 }
 
 export interface Scene {

@@ -98,6 +98,31 @@ class TranscriptResponse(BaseModel):
     metadata: TranscriptionMetadata = Field(default_factory=TranscriptionMetadata)
 
 
+class MediaType(str, Enum):
+    IMAGE = "image"
+    VIDEO = "video"
+    GENERATED = "generated"
+
+
+class TransitionType(str, Enum):
+    CUT = "cut"
+    FADE = "fade"
+    CROSSFADE = "crossfade"
+
+
+class SceneVisualMetadata(BaseModel):
+    """Normalized visual asset attached to a scene."""
+
+    media_type: MediaType = MediaType.GENERATED
+    source_path: str | None = None
+    normalized_path: str | None = None
+    transition_in: TransitionType = TransitionType.FADE
+    transition_duration_seconds: float = 0.5
+    width: int | None = None
+    height: int | None = None
+    duration_seconds: float | None = None
+
+
 class SceneMetadata(BaseModel):
     """Per-scene metadata for timeline sync and future AI enhancements."""
 
@@ -107,6 +132,7 @@ class SceneMetadata(BaseModel):
     transcript_segment_end: int | None = None
     word_count: int = 0
     duration_seconds: float | None = None
+    visual: SceneVisualMetadata | None = None
 
 
 class Scene(BaseModel):
@@ -125,6 +151,31 @@ class SegmentationMetadata(BaseModel):
     total_duration_seconds: float = 0.0
     source: str = "heuristic"
     timeline_aligned: bool = False
+
+
+class VisualTimelineEntry(BaseModel):
+    """Single visual layer on the render timeline."""
+
+    scene_index: int
+    start: float
+    end: float
+    duration: float
+    media_path: str
+    media_type: MediaType
+    transition_in: TransitionType = TransitionType.FADE
+    transition_duration_seconds: float = 0.5
+
+
+class VisualAssemblyMetadata(BaseModel):
+    entry_count: int = 0
+    total_duration_seconds: float = 0.0
+    transitions_applied: int = 0
+    normalized_assets: int = 0
+
+
+class VisualTimeline(BaseModel):
+    entries: list[VisualTimelineEntry] = Field(default_factory=list)
+    metadata: VisualAssemblyMetadata = Field(default_factory=VisualAssemblyMetadata)
 
 
 class SegmentationResult(BaseModel):
