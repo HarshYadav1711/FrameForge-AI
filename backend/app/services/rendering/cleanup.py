@@ -30,7 +30,8 @@ class ClipResourceManager:
 
 
 def partial_output_path(output_path: Path) -> Path:
-    return output_path.with_suffix(output_path.suffix + ".partial")
+    """Sibling path with a valid media extension so FFmpeg can infer the format."""
+    return output_path.with_name(f"{output_path.stem}.partial{output_path.suffix}")
 
 
 def remove_partial_output(output_path: Path) -> None:

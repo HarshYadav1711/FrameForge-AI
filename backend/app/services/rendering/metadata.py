@@ -53,6 +53,7 @@ def build_output_metadata(
     config: RenderOutputConfig,
     *,
     probe: dict | None = None,
+    fallback_duration: float | None = None,
 ) -> RenderOutputMetadata:
     """Build metadata for a rendered file."""
     probe = probe if probe is not None else probe_with_ffprobe(path)
@@ -85,6 +86,9 @@ def build_output_metadata(
             elif codec_type == "audio":
                 audio_codec = stream.get("codec_name", audio_codec) or audio_codec
                 audio_br = _parse_bitrate_kbps(stream.get("bit_rate"))
+
+    if duration <= 0 and fallback_duration and fallback_duration > 0:
+        duration = float(fallback_duration)
 
     return RenderOutputMetadata(
         path=str(path.resolve()),

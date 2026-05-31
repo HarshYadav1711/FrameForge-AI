@@ -50,7 +50,7 @@ def export_video_clip(
 
 def _apply_faststart_remux(path: Path) -> None:
     """Remux in place so the moov atom is at the front (web streaming)."""
-    temp_out = path.with_suffix(path.suffix + ".faststart")
+    temp_out = path.with_name(f"{path.stem}.faststart{path.suffix}")
     try:
         subprocess.run(
             [

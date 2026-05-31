@@ -13,6 +13,7 @@ from app.services.subtitles.typography import (
     measure_text_block,
     wrap_text_to_width,
 )
+from app.services.subtitles.utils import sanitize_display_text
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,8 @@ def render_subtitle_rgba(
     Supports stroke, optional background box, and responsive wrapping.
     """
     font = load_font(style)
-    lines = wrap_text_to_width(text, font, style.max_text_width)
+    display_text = sanitize_display_text(text)
+    lines = wrap_text_to_width(display_text, font, style.max_text_width, max_lines=2)
     if not lines:
         return np.zeros((1, 1, 4), dtype=np.uint8)
 

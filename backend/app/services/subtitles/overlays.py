@@ -19,6 +19,12 @@ from app.services.subtitles.moviepy_compat import (
     with_position,
     with_start,
 )
+
+
+def _with_duration(clip, duration: float):
+    if hasattr(clip, "with_duration"):
+        return clip.with_duration(duration)
+    return clip.set_duration(duration)
 from app.services.subtitles.render_helpers import (
     compute_overlay_position,
     render_subtitle_rgba,
@@ -91,7 +97,11 @@ def composite_with_subtitles(
 
     CompositeVideoClip = import_composite_video_clip()
     size = (base_clip.w, base_clip.h)
-    return CompositeVideoClip(
+    composite = CompositeVideoClip(
         [base_clip, *subtitle_clips],
         size=size,
     )
+    base_duration = getattr(base_clip, "duration", None)
+    if base_duration:
+        return _with_duration(composite, float(base_duration))
+    return composite

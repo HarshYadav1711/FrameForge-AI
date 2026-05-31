@@ -14,6 +14,132 @@ _SRT_TIMESTAMP = re.compile(
     r"(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})"
 )
 
+# Common LaTeX tokens from scripts — replaced for readable burned-in subtitles.
+_LATEX_TOKEN_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    (r"\displaystyle", " "),
+    (r"\partial", "∂"),
+    (r"\infty", "∞"),
+    (r"\alpha", "α"),
+    (r"\beta", "β"),
+    (r"\gamma", "γ"),
+    (r"\Delta", "Δ"),
+    (r"\sum", "Σ"),
+    (r"\int", "∫"),
+)
+
+_LATEX_COMMAND_RE = re.compile(r"\\[a-zA-Z]+")
+_LATEX_BRACES_RE = re.compile(r"[{}$]")
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def sanitize_display_text(text: str) -> str:
+    """Make script/transcript text readable in burned-in subtitles."""
+    cleaned = text.strip()
+    for token, replacement in _LATEX_TOKEN_REPLACEMENTS:
+        cleaned = cleaned.replace(token, replacement)
+    cleaned = _LATEX_COMMAND_RE.sub(" ", cleaned)
+    cleaned = _LATEX_BRACES_RE.sub(" ", cleaned)
+    return _WHITESPACE_RE.sub(" ", cleaned).strip()
+
+
+def chunk_cues_for_display(
+    cues: list[SubtitleCue],
+    *,
+    max_chars: int = 84,
+    max_duration: float = 5.0,
+) -> list[SubtitleCue]:
+    """
+    Split long cues into short, readable on-screen chunks.
+
+    Prevents a single transcript segment from filling the frame with wrapped text.
+    """
+    if not cues:
+        return []
+
+    chunked: list[SubtitleCue] = []
+    next_index = 1
+
+    for cue in cues:
+        text = sanitize_display_text(cue.text)
+        span = max(cue.end - cue.start, 0.05)
+        if not text:
+            continue
+
+        if len(text) <= max_chars and span <= max_duration:
+            chunked.append(
+                cue.model_copy(
+                    update={"index": next_index, "text": text},
+                )
+            )
+            next_index += 1
+            continue
+
+        parts = _split_text_for_cues(text, max_chars=max_chars)
+        if not parts:
+            continue
+
+        total_weight = sum(max(len(part), 1) for part in parts)
+        cursor = cue.start
+
+        for i, part in enumerate(parts):
+            weight = max(len(part), 1) / total_weight
+            part_end = cue.end if i == len(parts) - 1 else min(
+                cursor + span * weight,
+                cue.end,
+            )
+            chunked.append(
+                SubtitleCue(
+                    index=next_index,
+                    start=round(cursor, 3),
+                    end=round(part_end, 3),
+                    text=part,
+                )
+            )
+            next_index += 1
+            cursor = part_end
+
+    return normalize_cues(chunked)
+
+
+def _split_text_for_cues(text: str, *, max_chars: int) -> list[str]:
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+    if not sentences:
+        sentences = [text]
+
+    parts: list[str] = []
+    buffer = ""
+
+    def flush() -> None:
+        nonlocal buffer
+        if buffer.strip():
+            parts.append(buffer.strip())
+        buffer = ""
+
+    for sentence in sentences:
+        if len(sentence) <= max_chars:
+            candidate = f"{buffer} {sentence}".strip() if buffer else sentence
+            if len(candidate) <= max_chars:
+                buffer = candidate
+            else:
+                flush()
+                buffer = sentence
+        else:
+            flush()
+            words = sentence.split()
+            word_buf: list[str] = []
+            for word in words:
+                candidate = " ".join(word_buf + [word])
+                if len(candidate) <= max_chars or not word_buf:
+                    word_buf.append(word)
+                else:
+                    parts.append(" ".join(word_buf))
+                    word_buf = [word]
+            if word_buf:
+                parts.append(" ".join(word_buf))
+
+    flush()
+    return parts
+
 
 def format_srt_timestamp(seconds: float) -> str:
     h = int(seconds // 3600)

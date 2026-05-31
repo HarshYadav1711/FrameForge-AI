@@ -45,7 +45,7 @@ class TestCleanup(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "output.mp4"
             partial = partial_output_path(out)
-            self.assertEqual(partial.name, "output.mp4.partial")
+            self.assertEqual(partial.name, "output.partial.mp4")
             partial.write_bytes(b"partial")
             remove_partial_output(out)
             self.assertFalse(partial.exists())
@@ -76,6 +76,19 @@ class TestOutputMetadata(unittest.TestCase):
             meta = build_output_metadata(path, config, probe=None)
             self.assertEqual(meta.file_size_bytes, 100)
             self.assertEqual(meta.width, config.width)
+
+    def test_fallback_duration_when_probe_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "out.mp4"
+            path.write_bytes(b"\x00" * 100)
+            config = render_config_from_settings(Settings())
+            meta = build_output_metadata(
+                path,
+                config,
+                probe=None,
+                fallback_duration=66.7,
+            )
+            self.assertEqual(meta.duration_seconds, 66.7)
 
 
 if __name__ == "__main__":

@@ -44,6 +44,8 @@ def wrap_text_to_width(
     text: str,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
     max_width: int,
+    *,
+    max_lines: int | None = 2,
 ) -> list[str]:
     words = text.split()
     if not words:
@@ -52,17 +54,43 @@ def wrap_text_to_width(
     lines: list[str] = []
     current: list[str] = []
 
+    def append_line(line: str) -> bool:
+        if max_lines is not None and len(lines) >= max_lines:
+            return False
+        lines.append(line)
+        return True
+
+    def line_width(value: str) -> int:
+        bbox = font.getbbox(value)
+        return bbox[2] - bbox[0]
+
     for word in words:
+        if line_width(word) > max_width:
+            if current:
+                if not append_line(" ".join(current)):
+                    break
+                current = []
+            chunk = word
+            while chunk and (max_lines is None or len(lines) < max_lines):
+                piece = chunk
+                while piece and line_width(piece) > max_width:
+                    piece = piece[:-1]
+                if not piece:
+                    piece = chunk[:1]
+                if not append_line(piece):
+                    break
+                chunk = chunk[len(piece) :]
+            continue
+
         trial = " ".join(current + [word]) if current else word
-        bbox = font.getbbox(trial)
-        width = bbox[2] - bbox[0]
-        if width <= max_width or not current:
+        if line_width(trial) <= max_width or not current:
             current.append(word)
         else:
-            lines.append(" ".join(current))
+            if not append_line(" ".join(current)):
+                break
             current = [word]
 
-    if current:
+    if current and (max_lines is None or len(lines) < max_lines):
         lines.append(" ".join(current))
 
     return lines

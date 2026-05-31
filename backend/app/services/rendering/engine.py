@@ -11,6 +11,7 @@ from app.services.rendering.cleanup import (
     ClipResourceManager,
     cleanup_render_temp,
     ensure_clean_output_slot,
+    partial_output_path,
     promote_partial_output,
     remove_partial_output,
 )
@@ -94,9 +95,7 @@ class VideoRenderEngine:
                 visual_timeline=request.visual_timeline,
             )
 
-            partial = request.output_path.with_suffix(
-                request.output_path.suffix + ".partial"
-            )
+            partial = partial_output_path(request.output_path)
             lifecycle.set_partial(partial)
             lifecycle.transition(RenderPhase.ENCODING)
 
@@ -112,7 +111,11 @@ class VideoRenderEngine:
             reporter.report(RenderPhase.FINALIZING, 96, "Finalizing output…")
             promote_partial_output(request.output_path)
 
-            metadata = build_output_metadata(request.output_path, config)
+            metadata = build_output_metadata(
+                request.output_path,
+                config,
+                fallback_duration=composed.duration,
+            )
             if request.metadata_path:
                 write_render_output_artifact(metadata, request.metadata_path)
 

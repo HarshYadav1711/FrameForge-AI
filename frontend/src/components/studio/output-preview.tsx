@@ -73,11 +73,12 @@ export function OutputPreview({ jobId, job }: OutputPreviewProps) {
           <div className="rounded-lg bg-muted/30 px-3 py-2">
             <dt className="text-xs text-muted-foreground">Duration</dt>
             <dd className="mt-0.5 font-medium tabular-nums">
-              {output?.duration_seconds != null
-                ? `${output.duration_seconds.toFixed(1)}s`
-                : job.duration_seconds != null
-                  ? `${job.duration_seconds.toFixed(1)}s`
-                  : "—"}
+              {(() => {
+                const rendered = output?.duration_seconds ?? 0;
+                const seconds =
+                  rendered > 0 ? rendered : (job.duration_seconds ?? 0);
+                return seconds > 0 ? `${seconds.toFixed(1)}s` : "—";
+              })()}
             </dd>
           </div>
           <div className="rounded-lg bg-muted/30 px-3 py-2">

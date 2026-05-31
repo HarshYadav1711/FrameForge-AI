@@ -22,6 +22,7 @@ from app.services.subtitles.overlays import (
 from app.services.subtitles.srt import generate_srt, generate_srt_from_cues
 from app.services.subtitles.themes import THEME_PRESETS, get_theme
 from app.services.subtitles.utils import (
+    chunk_cues_for_display,
     cues_from_segments,
     normalize_cues,
     parse_srt_content,
@@ -58,9 +59,9 @@ def load_subtitle_cues(
 ) -> list[SubtitleCue]:
     """Load cues from transcript segments or an SRT file."""
     if segments:
-        return normalize_cues(cues_from_segments(segments))
+        return chunk_cues_for_display(normalize_cues(cues_from_segments(segments)))
     if srt_path and srt_path.exists():
-        return parse_srt_file(srt_path)
+        return chunk_cues_for_display(parse_srt_file(srt_path))
     return []
 
 
