@@ -22,8 +22,6 @@ The studio UI exposes a five-step progress stepper, a live processing log (fed f
 
 ## Screenshots
 
-> Add captures under `docs/screenshots/` and replace the placeholders below.
-
 | Studio — new project | Studio — pipeline running | Completed output |
 |----------------------|---------------------------|------------------|
 | ![Studio empty](docs/screenshots/studio-empty.png) | ![Studio processing](docs/screenshots/studio-processing.png) | ![Studio complete](docs/screenshots/studio-complete.png) |
