@@ -28,6 +28,47 @@ _model_lock = threading.Lock()
 _whisper_model = None
 _model_config_key: tuple[str, str, str] | None = None
 
+_CPU_COMPUTE_TYPE = "int8"
+
+
+def _is_gpu_runtime_error(exc: BaseException) -> bool:
+    """True when CUDA/cuBLAS libraries are missing or GPU init failed."""
+    message = f"{exc}".lower()
+    markers = (
+        "cublas",
+        "cudnn",
+        "cudart",
+        "cuda",
+        "gpu",
+        "dll is not found",
+        "cannot be loaded",
+        "no cuda",
+    )
+    return any(marker in message for marker in markers)
+
+
+def _uses_gpu(device: str) -> bool:
+    return device.strip().lower() in ("cuda", "gpu", "auto")
+
+
+def _reset_model_cache() -> None:
+    global _whisper_model, _model_config_key
+    with _model_lock:
+        _whisper_model = None
+        _model_config_key = None
+
+
+def _cpu_fallback_settings(settings: Settings) -> Settings:
+    compute = settings.whisper_compute_type
+    if compute in ("float16", "float32", "default"):
+        compute = _CPU_COMPUTE_TYPE
+    return settings.model_copy(
+        update={
+            "whisper_device": "cpu",
+            "whisper_compute_type": compute,
+        }
+    )
+
 
 def _load_model(settings: Settings):
     """Lazy-load WhisperModel with thread-safe singleton keyed by config."""
@@ -74,6 +115,33 @@ def _load_model(settings: Settings):
         _model_config_key = key
         logger.info("Whisper model ready")
         return _whisper_model
+
+
+def _load_model_resilient(settings: Settings) -> tuple[object, Settings]:
+    """Load Whisper on the requested device, falling back to CPU when GPU libs are missing."""
+    try:
+        return _load_model(settings), settings
+    except TranscriptionError as exc:
+        root = exc.__cause__ if exc.__cause__ is not None else exc
+        if not _uses_gpu(settings.whisper_device) or not _is_gpu_runtime_error(root):
+            raise
+        logger.warning(
+            "GPU transcription unavailable (%s); falling back to CPU",
+            root,
+        )
+        _reset_model_cache()
+        cpu_settings = _cpu_fallback_settings(settings)
+        return _load_model(cpu_settings), cpu_settings
+    except Exception as exc:
+        if not _uses_gpu(settings.whisper_device) or not _is_gpu_runtime_error(exc):
+            raise
+        logger.warning(
+            "GPU transcription unavailable (%s); falling back to CPU",
+            exc,
+        )
+        _reset_model_cache()
+        cpu_settings = _cpu_fallback_settings(settings)
+        return _load_model(cpu_settings), cpu_settings
 
 
 def _emit_progress(
@@ -125,8 +193,7 @@ class FasterWhisperTranscriptionService:
             message="Loading transcription model…",
         )
 
-        model = _load_model(self._settings)
-        settings = self._settings
+        model, settings = _load_model_resilient(self._settings)
 
         transcribe_kwargs: dict = {
             "vad_filter": settings.whisper_vad_filter,
@@ -154,11 +221,24 @@ class FasterWhisperTranscriptionService:
                 **transcribe_kwargs,
             )
         except Exception as exc:
-            logger.exception("Transcription failed for %s", audio_path.name)
-            raise TranscriptionError(
-                "Audio transcription failed",
-                cause=str(exc),
-            ) from exc
+            if _uses_gpu(settings.whisper_device) and _is_gpu_runtime_error(exc):
+                logger.warning(
+                    "GPU transcribe failed (%s); retrying on CPU",
+                    exc,
+                )
+                _reset_model_cache()
+                cpu_settings = _cpu_fallback_settings(self._settings)
+                model, settings = _load_model_resilient(cpu_settings)
+                segments_iter, info = model.transcribe(
+                    str(audio_path),
+                    **transcribe_kwargs,
+                )
+            else:
+                logger.exception("Transcription failed for %s", audio_path.name)
+                raise TranscriptionError(
+                    "Audio transcription failed",
+                    cause=str(exc),
+                ) from exc
 
         total_duration = float(info.duration) if info.duration else 0.0
         detected_language = getattr(info, "language", None)
