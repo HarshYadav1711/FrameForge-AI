@@ -98,6 +98,11 @@ class SceneSegmentationPipeline:
             except Exception as exc:
                 logger.warning("LLM segmentation unavailable, falling back: %s", exc)
 
+        if ctx.script.strip():
+            drafts = await propose_heuristic(ctx)
+            if drafts:
+                return drafts, "heuristic"
+
         if ctx.timeline_blocks:
             from app.services.segmentation.timeline import propose_from_timeline_blocks
 

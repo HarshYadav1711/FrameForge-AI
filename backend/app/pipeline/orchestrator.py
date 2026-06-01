@@ -15,19 +15,27 @@ from app.models.schemas import (
     JobStatus,
     PipelineStep,
     RenderingProgress,
+    Scene,
     TranscriptionProgress,
 )
 from app.services.job_store import JobStore
 from app.services.rendering import RenderRequest, VideoRenderEngine, get_render_queue
 from app.services.segmentation import segment_script
 from app.services.segmentation.formats import read_scenes_artifact
-from app.services.subtitles import generate_srt, subtitle_rendering_enabled
+from app.services.subtitles import generate_srt_from_cues
+from app.services.subtitles.utils import chunk_cues_for_display, cues_from_scenes, normalize_cues
 from app.services.transcription import transcribe_audio
 from app.services.transcription.formats import read_transcript_artifact
 from app.services.visual_assembly import write_visual_timeline_artifact
 from app.services.visuals import attach_visuals
 
 logger = logging.getLogger(__name__)
+
+
+def _write_scene_subtitles(scenes: list[Scene], output_path: Path) -> None:
+    """Write SRT from segmented script scenes (not raw Whisper output)."""
+    cues = chunk_cues_for_display(normalize_cues(cues_from_scenes(scenes)))
+    generate_srt_from_cues(cues, output_path)
 
 
 class PipelineOrchestrator:
@@ -76,6 +84,16 @@ class PipelineOrchestrator:
     async def run(self, job_id: str) -> None:
         paths = self._store.job_paths(job_id)
         record = self._store.get(job_id)
+        logger.info(
+            "Job %s pipeline profile=%s whisper=%s render=%s ollama=%s %dx%d",
+            job_id,
+            self._settings.pipeline_profile,
+            self._settings.whisper_model,
+            self._settings.render_preset,
+            self._settings.ollama_enabled,
+            self._settings.video_width,
+            self._settings.video_height,
+        )
 
         try:
             # Step 1: Transcribe
@@ -96,7 +114,11 @@ class PipelineOrchestrator:
                     audio_path,
                     self._settings,
                     transcript_out=paths["transcript"],
-                    initial_prompt=record.script[:500] if record.script else None,
+                    initial_prompt=(
+                        record.script[:500]
+                        if record.script and self._settings.whisper_initial_prompt
+                        else None
+                    ),
                     on_progress=self._transcription_progress_handler(job_id),
                 )
             except TranscriptionError as exc:
@@ -204,8 +226,8 @@ class PipelineOrchestrator:
                 "Generating subtitles…",
             )
             await asyncio.to_thread(
-                generate_srt,
-                segments,
+                _write_scene_subtitles,
+                scenes,
                 paths["subtitles"],
             )
 
@@ -223,9 +245,7 @@ class PipelineOrchestrator:
                 output_path=paths["output"],
                 settings=self._settings,
                 srt_path=paths["subtitles"],
-                transcript_segments=segments
-                if subtitle_rendering_enabled(self._settings)
-                else None,
+                transcript_segments=None,
                 visual_timeline=visual_timeline,
                 job_id=job_id,
                 metadata_path=paths["render_output"],

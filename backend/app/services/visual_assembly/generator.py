@@ -74,11 +74,14 @@ def generate_scene_visual(
     title_font = _load_font(56)
     sub_font = _load_font(28)
 
-    title = scene.title[:80]
-    prompt = scene.visual_prompt[:120]
+    label = f"Scene {scene.index + 1}"
+    title = scene.title.strip()[:72]
+    if title.lower().startswith("cinematic visual inspired by:"):
+        title = title.split(":", 1)[-1].strip()[:72]
 
-    draw.text((80, height // 2 - 80), title, fill=(248, 250, 252), font=title_font)
-    draw.text((80, height // 2 + 10), prompt, fill=(203, 213, 225), font=sub_font)
+    draw.text((80, height // 2 - 40), label, fill=(148, 163, 184), font=sub_font)
+    if title and title != label:
+        draw.text((80, height // 2 + 8), title, fill=(248, 250, 252), font=title_font)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     img.save(output_path, format="JPEG", quality=settings.visual_jpeg_quality)

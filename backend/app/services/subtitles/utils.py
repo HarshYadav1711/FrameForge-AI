@@ -6,7 +6,7 @@ import logging
 import re
 from pathlib import Path
 
-from app.models.schemas import SubtitleCue, TranscriptSegment
+from app.models.schemas import Scene, SubtitleCue, TranscriptSegment
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +168,26 @@ def cues_from_segments(segments: list[TranscriptSegment]) -> list[SubtitleCue]:
                 index=index,
                 start=round(seg.start, 3),
                 end=round(seg.end, 3),
+                text=text,
+            )
+        )
+        index += 1
+    return cues
+
+
+def cues_from_scenes(scenes: list[Scene]) -> list[SubtitleCue]:
+    """Build subtitle cues from segmented script scenes (preferred over raw Whisper text)."""
+    cues: list[SubtitleCue] = []
+    index = 1
+    for scene in scenes:
+        text = scene.narration.strip()
+        if not text or scene.start_time is None or scene.end_time is None:
+            continue
+        cues.append(
+            SubtitleCue(
+                index=index,
+                start=round(scene.start_time, 3),
+                end=round(scene.end_time, 3),
                 text=text,
             )
         )

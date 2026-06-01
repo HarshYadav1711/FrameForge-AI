@@ -9,6 +9,7 @@ from app.services.subtitles.moviepy_compat import (
     import_composite_video_clip,
     import_image_clip,
     import_video_file_clip,
+    without_audio,
     with_start,
 )
 from app.services.visual_assembly.transitions import (
@@ -51,6 +52,7 @@ def build_scene_clip(
         if not media_path.exists():
             raise FileNotFoundError(f"Video not found: {media_path}")
         clip = VideoFileClip(str(media_path))
+        clip = without_audio(clip)
         if clip.duration and clip.duration > entry.duration:
             clip = _subclip(clip, 0, entry.duration)
         clip = _with_duration(clip, entry.duration)

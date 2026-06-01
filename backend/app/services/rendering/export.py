@@ -41,8 +41,7 @@ def export_video_clip(
         **write_kwargs,
     )
 
-    if config.faststart:
-        _apply_faststart_remux(partial)
+    # faststart is applied via ffmpeg_params during encode; skip a second remux pass.
 
     reporter.report(RenderPhase.ENCODING, 94, "Encode complete")
     return partial

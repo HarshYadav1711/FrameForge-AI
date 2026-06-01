@@ -24,7 +24,7 @@ def propose_from_timeline_blocks(
             SceneDraft(
                 title=title,
                 narration=text,
-                visual_prompt=f"Cinematic visual inspired by: {title}",
+                visual_prompt=f"Cinematic background for scene {block.index + 1}",
                 semantic_group=f"block_{block.index}",
             )
         )

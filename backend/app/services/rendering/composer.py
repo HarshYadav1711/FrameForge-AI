@@ -16,7 +16,11 @@ from app.services.subtitles import (
     resolve_style_for_video,
     subtitle_rendering_enabled,
 )
-from app.services.subtitles.moviepy_compat import import_audio_file_clip, import_composite_video_clip
+from app.services.subtitles.moviepy_compat import (
+    import_audio_file_clip,
+    import_composite_video_clip,
+    without_audio,
+)
 from app.services.visual_assembly.clips import build_clips_from_timeline
 from app.services.visual_assembly.timeline import build_visual_timeline
 
@@ -80,6 +84,7 @@ def compose_video(
     if subtitle_rendering_enabled(settings):
         cues = load_subtitle_cues(
             segments=transcript_segments,
+            scenes=scenes,
             srt_path=srt_path,
         )
         if cues:
@@ -96,6 +101,7 @@ def compose_video(
         else:
             logger.warning("Subtitle rendering enabled but no cues found")
 
+    video = without_audio(video)
     if hasattr(video, "with_audio"):
         final = video.with_audio(audio)
     else:

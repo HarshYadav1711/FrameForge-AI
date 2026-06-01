@@ -101,6 +101,23 @@ def with_position(clip, position):
     return clip.set_position(position)
 
 
+def without_audio(clip):
+    """Remove any audio track from a clip before attaching narration."""
+    if clip is None:
+        return clip
+    if hasattr(clip, "without_audio"):
+        try:
+            return clip.without_audio()
+        except Exception:
+            pass
+    if hasattr(clip, "audio") and clip.audio is not None:
+        try:
+            clip.audio = None
+        except Exception:
+            pass
+    return clip
+
+
 def with_effects(clip, effects: list):
     if hasattr(clip, "with_effects"):
         return clip.with_effects(effects)

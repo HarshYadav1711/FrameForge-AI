@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 from app.config import Settings
-from app.models.schemas import SubtitleCue, TranscriptSegment
+from app.models.schemas import Scene, SubtitleCue, TranscriptSegment
 from app.services.subtitles.config import (
     ResolvedSubtitleStyle,
     SubtitleStyleConfig,
@@ -23,6 +23,7 @@ from app.services.subtitles.srt import generate_srt, generate_srt_from_cues
 from app.services.subtitles.themes import THEME_PRESETS, get_theme
 from app.services.subtitles.utils import (
     chunk_cues_for_display,
+    cues_from_scenes,
     cues_from_segments,
     normalize_cues,
     parse_srt_content,
@@ -55,9 +56,17 @@ __all__ = [
 def load_subtitle_cues(
     *,
     segments: list[TranscriptSegment] | None = None,
+    scenes: list[Scene] | None = None,
     srt_path: Path | None = None,
 ) -> list[SubtitleCue]:
-    """Load cues from transcript segments or an SRT file."""
+    """Load cues from timed scenes, transcript segments, or an SRT file."""
+    if scenes:
+        scene_cues = chunk_cues_for_display(
+            normalize_cues(cues_from_scenes(scenes))
+        )
+        if scene_cues:
+            return scene_cues
+
     if segments:
         return chunk_cues_for_display(normalize_cues(cues_from_segments(segments)))
     if srt_path and srt_path.exists():

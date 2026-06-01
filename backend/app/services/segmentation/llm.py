@@ -98,7 +98,7 @@ async def propose_with_ollama(ctx: SegmentationContext) -> list[SceneDraft]:
         "stream": False,
         "options": {"temperature": 0.3},
     }
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=45.0)) as client:
         resp = await client.post(url, json=payload)
         resp.raise_for_status()
         data = resp.json()
@@ -124,7 +124,7 @@ async def propose_with_gemini(ctx: SegmentationContext) -> list[SceneDraft]:
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": 0.3},
     }
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=45.0)) as client:
         resp = await client.post(url, params=params, json=body)
         resp.raise_for_status()
         data = resp.json()
